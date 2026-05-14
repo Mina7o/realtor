@@ -1,0 +1,12 @@
+address,city,state,zip,county,tax_value,land_value,building_value,list_price,diff_pct,year_built,sqft,bedrooms,bathrooms,last_sale_price,last_sale_date,listing_url,listing_source
+1134 Riverside Dr,Charlotte,NC,28214,Charlotte,321300.0,121400.0,199900.0,285000.0,-11.3,2003,1874.0,3,2.0,370000.0,2021-09-17T00:00:00.000Z,,rentcast
+724 Rocky River Rd W,Charlotte,NC,28213,Charlotte,842100.0,675300.0,166800.0,750000.0,-10.94,1956,1757.0,3,1.5,175000.0,2021-04-06T00:00:00.000Z,,rentcast
+809 Pine Forest Rd,Charlotte,NC,28214,Charlotte,469600.0,81000.0,388600.0,475000.0,1.15,2000,3066.0,3,2.5,191500.0,2016-02-03T00:00:00.000Z,,rentcast
+3549 Calpella Ct,Charlotte,NC,28262,Charlotte,231500.0,52000.0,179500.0,236000.0,1.94,2006,1200.0,2,2.5,132500.0,2017-07-10T00:00:00.000Z,,rentcast
+1917 Tom Sadler Rd,Charlotte,NC,28214,Charlotte,265800.0,101400.0,164400.0,280000.0,5.34,1954,1404.0,2,1.0,218000.0,2022-06-29T00:00:00.000Z,,rentcast
+7378 Winery Ln,Charlotte,NC,28227,Charlotte,178070.0,,178070.0,189900.0,6.64,1984,1093.0,2,2.0,52500.0,1992-02-26T00:00:00.000Z,,rentcast
+11130 Whitlock Crossing Ct,Charlotte,NC,28273,Charlotte,248200.0,70000.0,178200.0,265000.0,6.77,1995,1423.0,3,2.0,263000.0,2022-09-22T00:00:00.000Z,,rentcast
+3645 S Tryon St,Charlotte,NC,28217,Charlotte,463300.0,110000.0,353300.0,495000.0,6.84,2022,1535.0,3,3.5,467500.0,2022-04-18T00:00:00.000Z,,rentcast
+929 Westmere Ave,Charlotte,NC,28208,Charlotte,450257.0,,450257.0,499000.0,10.83,2007,1869.0,2,2.0,200000.0,2012-06-27T00:00:00.000Z,,rentcast
+10202 Orchard Grass Ct,Charlotte,NC,28278,Charlotte,340100.0,80000.0,260100.0,379990.0,11.73,2002,1437.0,3,2.5,243000.0,2020-07-09T00:00:00.000Z,,rentcast
+3329 Draper Ave,Charlotte,NC,28205,Charlotte,437200.0,200000.0,237200.0,498800.0,14.09,1948,1554.0,3,2.0,207000.0,2008-07-16T00:00:00.000Z,,rentcast

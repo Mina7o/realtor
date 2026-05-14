@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NC/SC Property Deals Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+    .header { background: #1e293b; padding: 1rem 2rem; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { font-size: 1.25rem; color: #f1f5f9; }
+    .header span { color: #94a3b8; font-size: 0.875rem; }
+    .stats-bar { display: flex; gap: 1rem; padding: 1rem 2rem; background: #1e293b; border-bottom: 1px solid #334155; flex-wrap: wrap; }
+    .stat-card { background: #0f172a; padding: 0.75rem 1.25rem; border-radius: 8px; border: 1px solid #334155; min-width: 140px; }
+    .stat-card .label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; }
+    .stat-card .value { font-size: 1.25rem; font-weight: 600; color: #f1f5f9; }
+    .stat-card .value.green { color: #4ade80; }
+    .stat-card .value.blue { color: #60a5fa; }
+    .stat-card .value.amber { color: #fbbf24; }
+    .main { display: flex; height: calc(100vh - 140px); }
+    .map-panel { flex: 1; min-width: 0; }
+    #map { height: 100%; width: 100%; }
+    .table-panel { width: 480px; overflow-y: auto; background: #1e293b; border-left: 1px solid #334155; }
+    .table-panel .toolbar { padding: 0.75rem; display: flex; gap: 0.5rem; border-bottom: 1px solid #334155; flex-wrap: wrap; }
+    .table-panel .toolbar input, .table-panel .toolbar select { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 0.4rem 0.6rem; border-radius: 4px; font-size: 0.8rem; }
+    .table-panel .toolbar button { background: #3b82f6; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+    .table-panel .toolbar button:hover { background: #2563eb; }
+    .table-panel .toolbar button:disabled { background: #475569; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th { position: sticky; top: 0; background: #334155; padding: 0.5rem; text-align: left; cursor: pointer; color: #94a3b8; font-weight: 500; }
+    th:hover { color: #f1f5f9; }
+    td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #1e293b; }
+    tr:hover { background: #334155; }
+    .price { font-family: monospace; text-align: right; }
+    .deal-badge { background: #166534; color: #86efac; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.7rem; white-space: nowrap; }
+    .no-deal { color: #94a3b8; font-size: 0.7rem; }
+    .under { background: #16653433; }
+    .over { background: #7c2d1233; }
+    .loading { text-align: center; padding: 2rem; color: #94a3b8; }
+    .leaflet-popup-content { margin: 0; }
+    .popup-content { font-size: 0.8rem; min-width: 200px; }
+    .popup-content h3 { font-size: 0.9rem; margin-bottom: 0.4rem; }
+    .popup-content .row { display: flex; justify-content: space-between; padding: 0.15rem 0; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>NC/SC Property Deals Dashboard</h1>
+      <span>Active listings matched against tax assessed values</span>
+    </div>
+    <div style="display:flex;gap:0.75rem;align-items:center">
+      <span id="api-status" style="font-size:0.8rem;color:#94a3b8">RentCast API: 45 calls remaining</span>
+    </div>
+  </div>
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat-card"><div class="label">Total Listings</div><div class="value blue" id="stat-total">-</div></div>
+    <div class="stat-card"><div class="label">Avg Price</div><div class="value" id="stat-avg">-</div></div>
+    <div class="stat-card"><div class="label">Price Range</div><div class="value" id="stat-range">-</div></div>
+    <div class="stat-card"><div class="label">With Tax Data</div><div class="value amber" id="stat-taxed">-</div></div>
+    <div class="stat-card"><div class="label">Deals ≤15%</div><div class="value green" id="stat-deals">-</div></div>
+  </div>
+  <div class="main">
+    <div class="map-panel"><div id="map"></div></div>
+    <div class="table-panel">
+      <div class="toolbar">
+        <input type="text" id="search" placeholder="Search address..." style="flex:1" oninput="filterTable()">
+        <select id="deal-filter" onchange="filterTable()">
+          <option value="all">All</option>
+          <option value="under">Under tax value</option>
+          <option value="within15">Within 15% of tax</option>
+          <option value="over">Over tax value</option>
+          <option value="no_tax">No tax data</option>
+        </select>
+        <button onclick="enrichBatch()" id="enrich-btn">Enrich Tax</button>
+      </div>
+      <div style="overflow-y:auto;height:calc(100% - 44px)" id="table-container">
+        <table id="listings-table">
+          <thead>
+            <tr>
+              <th onclick="sortBy('address')">Address</th>
+              <th onclick="sortBy('list_price')" style="text-align:right">Price</th>
+              <th onclick="sortBy('diff_pct')" style="text-align:right">vs Tax</th>
+              <th onclick="sortBy('property_type')">Type</th>
+              <th onclick="sortBy('sqft')" style="text-align:right">SqFt</th>
+            </tr>
+          </thead>
+          <tbody id="listings-body">
+            <tr><td colspan="5" class="loading">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const DEAL_THRESHOLD = 15;
+    let map, markersLayer, allListings = [], filteredListings = [];
+    let sortField = 'list_price', sortAsc = false;
+
+    function initMap() {
+      map = L.map('map', { zoomControl: true }).setView([35.2271, -80.8431], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap',
+        maxZoom: 19
+      }).addTo(map);
+      markersLayer = L.layerGroup().addTo(map);
+    }
+
+    function getColor(diff) {
+      if (diff === null || diff === undefined) return '#94a3b8';
+      if (diff < -15) return '#fbbf24';
+      if (diff < 0) return '#4ade80';
+      if (diff <= 15) return '#60a5fa';
+      return '#f87171';
+    }
+
+    function formatPrice(v) {
+      if (!v) return '-';
+      return '$' + Number(v).toLocaleString();
+    }
+
+    function formatDiff(d) {
+      if (d === null || d === undefined) return '<span class="no-deal">N/A</span>';
+      const cls = Math.abs(d) <= DEAL_THRESHOLD ? 'deal-badge' : 'no-deal';
+      const sign = d > 0 ? '+' : '';
+      return `<span class="${cls}">${sign}${d.toFixed(1)}%</span>`;
+    }
+
+    function updateMap(listings) {
+      markersLayer.clearLayers();
+      listings.forEach(l => {
+        if (!l.lat || !l.lng) return;
+        const color = getColor(l.diff_pct);
+        const marker = L.circleMarker([l.lat, l.lng], {
+          radius: 7, fillColor: color, color: '#fff',
+          weight: 1, opacity: 1, fillOpacity: 0.8
+        });
+        const taxStr = l.tax_value ? `$${Number(l.tax_value).toLocaleString()}` : 'N/A';
+        const diffStr = l.diff_pct !== null && l.diff_pct !== undefined ? `${l.diff_pct > 0 ? '+' : ''}${l.diff_pct.toFixed(1)}%` : 'N/A';
+        marker.bindPopup(`
+          <div class="popup-content">
+            <h3>${l.address || ''}</h3>
+            <div class="row"><span>List Price</span><strong>${formatPrice(l.list_price)}</strong></div>
+            <div class="row"><span>Tax Value</span><span>${taxStr}</span></div>
+            <div class="row"><span>Difference</span><strong>${diffStr}</strong></div>
+            ${l.sqft ? `<div class="row"><span>SqFt</span><span>${Number(l.sqft).toLocaleString()}</span></div>` : ''}
+            ${l.bedrooms ? `<div class="row"><span>Beds/Baths</span><span>${l.bedrooms}/${l.bathrooms || '?'}</span></div>` : ''}
+            ${l.year_built ? `<div class="row"><span>Year Built</span><span>${l.year_built}</span></div>` : ''}
+            ${l.url ? `<div class="row"><a href="${l.url}" target="_blank">View Listing →</a></div>` : ''}
+          </div>
+        `);
+        markersLayer.addLayer(marker);
+      });
+    }
+
+    function renderTable(listings) {
+      const tbody = document.getElementById('listings-body');
+      tbody.innerHTML = '';
+      listings.forEach(l => {
+        const rowClass = l.diff_pct !== null && l.diff_pct < 0 ? 'under' : (l.diff_pct !== null && l.diff_pct > DEAL_THRESHOLD ? 'over' : '');
+        tbody.innerHTML += `<tr class="${rowClass}" onclick="flyTo(${l.lat},${l.lng})">
+          <td>${l.address || ''}</td>
+          <td class="price">${formatPrice(l.list_price)}</td>
+          <td style="text-align:right">${formatDiff(l.diff_pct)}</td>
+          <td>${l.property_type || '-'}</td>
+          <td class="price">${l.sqft ? Number(l.sqft).toLocaleString() : '-'}</td>
+        </tr>`;
+      });
+      updateMap(listings);
+    }
+
+    function filterTable() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const dealFilter = document.getElementById('deal-filter').value;
+      filteredListings = allListings.filter(l => {
+        if (q && !(l.address || '').toLowerCase().includes(q) && !(l.city || '').toLowerCase().includes(q)) return false;
+        if (dealFilter === 'under') return l.diff_pct !== null && l.diff_pct < 0;
+        if (dealFilter === 'within15') return l.diff_pct !== null && Math.abs(l.diff_pct) <= DEAL_THRESHOLD;
+        if (dealFilter === 'over') return l.diff_pct !== null && l.diff_pct > DEAL_THRESHOLD;
+        if (dealFilter === 'no_tax') return l.diff_pct === null || l.diff_pct === undefined;
+        return true;
+      });
+      sortData();
+      renderTable(filteredListings);
+    }
+
+    function sortBy(field) {
+      if (sortField === field) sortAsc = !sortAsc;
+      else { sortField = field; sortAsc = true; }
+      sortData();
+      renderTable(filteredListings);
+    }
+
+    function sortData() {
+      filteredListings.sort((a, b) => {
+        let va = a[sortField], vb = b[sortField];
+        if (typeof va === 'string') va = va.toLowerCase();
+        if (typeof vb === 'string') vb = vb.toLowerCase();
+        if (va === null || va === undefined) va = sortAsc ? Infinity : -Infinity;
+        if (vb === null || vb === undefined) vb = sortAsc ? Infinity : -Infinity;
+        return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+      });
+    }
+
+    function flyTo(lat, lng) {
+      if (lat && lng) map.setView([lat, lng], 16);
+    }
+
+    function updateStats(stats) {
+      document.getElementById('stat-total').textContent = stats.total_listings;
+      document.getElementById('stat-avg').textContent = formatPrice(stats.avg_price);
+      document.getElementById('stat-range').textContent = `${formatPrice(stats.min_price)} - ${formatPrice(stats.max_price)}`;
+      document.getElementById('stat-taxed').textContent = stats.with_tax_data;
+      document.getElementById('stat-deals').textContent = stats.deals_15pct;
+    }
+
+    async function loadData() {
+      try {
+        const [listings, stats] = await Promise.all([
+          fetch('/api/listings').then(r => r.json()),
+          fetch('/api/stats').then(r => r.json())
+        ]);
+        allListings = listings;
+        updateStats(stats);
+        filteredListings = [...allListings];
+        sortBy('diff_pct');
+      } catch (e) {
+        document.getElementById('listings-body').innerHTML = `<tr><td colspan="5" style="color:#f87171;text-align:center">Error loading data</td></tr>`;
+      }
+    }
+
+    async function enrichBatch() {
+      const btn = document.getElementById('enrich-btn');
+      btn.disabled = true;
+      btn.textContent = 'Enriching...';
+      try {
+        const resp = await fetch('/api/enrich-batch', { method: 'POST' });
+        const result = await resp.json();
+        btn.textContent = `Enriched ${result.enriched} properties`;
+        setTimeout(() => { btn.textContent = 'Enrich Tax'; btn.disabled = false; }, 2000);
+        loadData();
+      } catch (e) {
+        btn.textContent = 'Error';
+        btn.disabled = false;
+      }
+    }
+
+    initMap();
+    loadData();
+  </script>
+</body>
+</html>
