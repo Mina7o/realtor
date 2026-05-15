@@ -32,11 +32,43 @@ def get_listings():
             t.year_built, t.sqft, t.bedrooms, t.bathrooms,
             t.sale_price as last_sale_price,
             t.sale_date as last_sale_date,
-            c.name as county
+            c.name as county,
+            a.avm_value, a.avm_high, a.avm_low, a.avm_confidence,
+            a.assessed_value, a.market_value,
+            a.owner_name, a.absentee_status, a.corporate_indicator,
+            a.property_type as attom_prop_type,
+            a.quality, a.condition,
+            a.lot_acres,
+            cm.match_score as county_match_score,
+            mp.full_owner_name as county_owner,
+            mp.amt_totalvalue as county_assessed_value,
+            mp.amt_landvalue as county_land_value,
+            mp.amt_netbldgvalue as county_building_value,
+            mp.amt_price as county_last_sale_price,
+            mp.dte_dateofsale as county_last_sale_date,
+            mp.txt_propertyuse_desc as county_property_use,
+            mp.num_totalac as county_acres,
+            mp.pid as county_pid,
+            mp.txt_mailaddr1 as county_mail_addr,
+            mp.txt_city as county_mail_city,
+            mp.txt_state as county_mail_state,
+            mp.txt_zipcode as county_mail_zip,
+            CASE WHEN mp.txt_mailaddr1 IS NOT NULL
+                  AND (
+                    (UPPER(mp.txt_city) != UPPER(p.city) OR UPPER(mp.txt_state) != UPPER(p.state))
+                    OR mp.txt_mailaddr1 LIKE 'PO BOX%'
+                    OR mp.txt_mailaddr1 LIKE 'P O BOX%'
+                    OR mp.txt_mailaddr1 LIKE 'P.O.%'
+                  )
+                 THEN 1 ELSE 0
+            END as county_absentee
         FROM listings l
         JOIN properties p ON l.property_id = p.id
         LEFT JOIN tax_records t ON p.id = t.property_id
         LEFT JOIN counties c ON p.county_id = c.id
+        LEFT JOIN attom_cache a ON p.id = a.property_id
+        LEFT JOIN listing_county_match cm ON l.id = cm.listing_id
+        LEFT JOIN mecklenburg_parcels mp ON cm.pid = mp.pid
         WHERE l.list_price IS NOT NULL
         ORDER BY l.list_price ASC
     """).fetchall()
@@ -44,10 +76,15 @@ def get_listings():
     results = []
     for r in rows:
         d = dict(r)
-        if d['tax_value'] and d['tax_value'] > 0 and d['list_price']:
-            d['diff_pct'] = round((d['list_price'] - d['tax_value']) * 100.0 / d['tax_value'], 2)
+        base_val = d['tax_value'] or d['county_assessed_value']
+        if base_val and base_val > 0 and d['list_price']:
+            d['diff_pct'] = round((d['list_price'] - base_val) * 100.0 / base_val, 2)
         else:
             d['diff_pct'] = None
+        if d['avm_value'] and d['avm_value'] > 0 and d['list_price']:
+            d['avm_diff_pct'] = round((d['list_price'] - d['avm_value']) * 100.0 / d['avm_value'], 2)
+        else:
+            d['avm_diff_pct'] = None
         results.append(d)
     return jsonify(results)
 
@@ -61,12 +98,30 @@ def get_stats():
             ROUND(MIN(l.list_price), 0) as min_price,
             ROUND(MAX(l.list_price), 0) as max_price,
             COUNT(t.mkt_val_total) as with_tax_data,
+            COUNT(a.id) as with_attom_data,
+            COUNT(CASE WHEN a.absentee_status = 'A' THEN 1 END) as absentee_owners,
+            COUNT(CASE WHEN a.avm_value > 0 AND l.list_price > 0
+                  AND a.avm_value >= l.list_price THEN 1 END) as at_or_below_avm,
             COUNT(CASE WHEN t.mkt_val_total > 0 AND l.list_price > 0
                   AND ABS(l.list_price - t.mkt_val_total) * 100.0 / t.mkt_val_total <= 15
-                  THEN 1 END) as deals_15pct
+                  THEN 1 END) as deals_15pct,
+            COUNT(cm.listing_id) as with_county_data,
+            COUNT(CASE WHEN mp.txt_mailaddr1 IS NOT NULL
+                  AND (
+                    (UPPER(mp.txt_city) != UPPER(p.city) OR UPPER(mp.txt_state) != UPPER(p.state))
+                    OR mp.txt_mailaddr1 LIKE 'PO BOX%'
+                    OR mp.txt_mailaddr1 LIKE 'P O BOX%'
+                    OR mp.txt_mailaddr1 LIKE 'P.O.%'
+                  )
+                  THEN 1 END) as county_absentee_owners,
+            COUNT(CASE WHEN mp.amt_totalvalue > 0 AND l.list_price > 0
+                  AND mp.amt_totalvalue >= l.list_price THEN 1 END) as at_or_below_assessed
         FROM listings l
         JOIN properties p ON l.property_id = p.id
         LEFT JOIN tax_records t ON p.id = t.property_id
+        LEFT JOIN attom_cache a ON p.id = a.property_id
+        LEFT JOIN listing_county_match cm ON l.id = cm.listing_id
+        LEFT JOIN mecklenburg_parcels mp ON cm.pid = mp.pid
     """).fetchone()
     return jsonify(dict(stats))
 
