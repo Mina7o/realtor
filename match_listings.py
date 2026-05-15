@@ -1,6 +1,13 @@
 import re
 import sys
+import os
+import sqlite3
 from db import get_conn
+
+COUNTY_DB = os.path.join(os.path.dirname(__file__), 'county_parcels_full.db')
+
+def get_county_conn():
+    return sqlite3.connect(COUNTY_DB)
 
 SUFFIX_MAP = {
     "ST": "STREET", "DR": "DRIVE", "AVE": "AVENUE", "AV": "AVENUE",
@@ -132,6 +139,8 @@ def score_match(listing_parts, county_situs):
 
 def match_listings():
     conn = get_conn()
+    county = get_county_conn()
+    county.row_factory = sqlite3.Row
 
     # Ensure table exists
     conn.execute("""
@@ -144,6 +153,10 @@ def match_listings():
             matched_at TEXT DEFAULT (datetime('now'))
         )
     """)
+
+    if not os.path.exists(COUNTY_DB):
+        print(f"ERROR: {COUNTY_DB} not found. Run fetch_mecklenburg.py first.")
+        return
 
     # Count existing matches
     existing = conn.execute(
@@ -201,7 +214,7 @@ def match_listings():
         first_word = l_base.split()[0] if l_base else ""
         pattern = f"%{l_num}%{first_word}%"
 
-        candidates = conn.execute("""
+        candidates = county.execute("""
             SELECT pid, situsaddress1
             FROM mecklenburg_parcels
             WHERE situsaddress1 LIKE ?
@@ -243,6 +256,7 @@ def match_listings():
         if matched % 50 == 0:
             print(f"  Progress: {matched} matched")
 
+    county.close()
     conn.close()
     print(f"\nDone: {matched} matched, {unmatched} unmatched, {multi_match} had multiple candidates")
 
