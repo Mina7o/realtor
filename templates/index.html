@@ -35,6 +35,9 @@
     .price { font-family: monospace; text-align: right; }
     .deal-badge { background: #166534; color: #86efac; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.7rem; white-space: nowrap; }
     .no-deal { color: #94a3b8; font-size: 0.7rem; }
+    .badge { display:inline-block; padding:0.1rem 0.35rem; border-radius:3px; font-size:0.65rem; font-weight:600; }
+    .badge.absentee { background:#92400e; color:#fbbf24; }
+    .badge.deal { background:#166534; color:#86efac; }
     .under { background: #16653433; }
     .over { background: #7c2d1233; }
     .loading { text-align: center; padding: 2rem; color: #94a3b8; }
@@ -62,6 +65,9 @@
     <div class="stat-card"><div class="label">Avg Price</div><div class="value" id="stat-avg">-</div></div>
     <div class="stat-card"><div class="label">Price Range</div><div class="value" id="stat-range">-</div></div>
     <div class="stat-card"><div class="label">With Tax Data</div><div class="value amber" id="stat-taxed">-</div></div>
+    <div class="stat-card"><div class="label">With County Data</div><div class="value blue" id="stat-county">-</div></div>
+    <div class="stat-card"><div class="label">County Absentee</div><div class="value amber" id="stat-absentee">-</div></div>
+    <div class="stat-card"><div class="label">At or Below Assessed</div><div class="value green" id="stat-assessed">-</div></div>
     <div class="stat-card"><div class="label">Deals ≤15%</div><div class="value green" id="stat-deals">-</div></div>
   </div>
   <div class="main">
@@ -85,8 +91,10 @@
               <th onclick="sortBy('address')">Address</th>
               <th onclick="sortBy('list_price')" style="text-align:right">Price</th>
               <th onclick="sortBy('diff_pct')" style="text-align:right">vs Tax</th>
-              <th onclick="sortBy('property_type')">Type</th>
-              <th onclick="sortBy('sqft')" style="text-align:right">SqFt</th>
+              <th onclick="sortBy('avm_diff_pct')" style="text-align:right">vs AVM</th>
+              <th onclick="sortBy('county_assessed_value')" style="text-align:right">vs Assessed</th>
+              <th onclick="sortBy('owner_name')">Owner</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody id="listings-body">
@@ -131,6 +139,11 @@
       return `<span class="${cls}">${sign}${d.toFixed(1)}%</span>`;
     }
 
+    function escapeHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     function updateMap(listings) {
       markersLayer.clearLayers();
       listings.forEach(l => {
@@ -142,15 +155,26 @@
         });
         const taxStr = l.tax_value ? `$${Number(l.tax_value).toLocaleString()}` : 'N/A';
         const diffStr = l.diff_pct !== null && l.diff_pct !== undefined ? `${l.diff_pct > 0 ? '+' : ''}${l.diff_pct.toFixed(1)}%` : 'N/A';
+        const absenteeBadge = (l.county_absentee || l.absentee_status === 'A') ? '<span style="background:#92400e;color:#fbbf24;padding:0 4px;border-radius:3px;font-size:0.7rem">ABSENTEE</span>' : '';
+        const ownerName = l.owner_name || l.county_owner || 'N/A';
+        const avmStr = l.avm_value ? `${formatPrice(l.avm_value)}${l.avm_diff_pct !== null ? ' (' + (l.avm_diff_pct > 0 ? '+' : '') + l.avm_diff_pct.toFixed(1) + '%)' : ''}` : 'N/A';
+        const assessedStr = l.county_assessed_value ? formatPrice(l.county_assessed_value) : (l.assessed_value ? formatPrice(l.assessed_value) : 'N/A');
+        const lastSale = l.county_last_sale_price ? `${formatPrice(l.county_last_sale_price)} (${l.county_last_sale_date || '?'})` : 'N/A';
         marker.bindPopup(`
           <div class="popup-content">
-            <h3>${l.address || ''}</h3>
+            <h3>${escapeHtml(l.address || '')}</h3>
             <div class="row"><span>List Price</span><strong>${formatPrice(l.list_price)}</strong></div>
-            <div class="row"><span>Tax Value</span><span>${taxStr}</span></div>
-            <div class="row"><span>Difference</span><strong>${diffStr}</strong></div>
+            <div class="row"><span>ATTOM AVM</span><span>${avmStr}</span></div>
+            <div class="row"><span>County Assessed</span><span>${assessedStr}</span></div>
+            ${l.county_land_value ? `<div class="row"><span>Land/Building</span><span>${formatPrice(l.county_land_value)} / ${formatPrice(l.county_building_value)}</span></div>` : ''}
+            <div class="row"><span>Last Sale</span><span>${lastSale}</span></div>
+            <div class="row"><span>County Use</span><span>${escapeHtml(l.county_property_use || 'N/A')}</span></div>
+            <div class="row"><span>Owner</span><span>${escapeHtml(ownerName)} ${absenteeBadge}</span></div>
+            ${l.county_mail_city ? `<div class="row"><span>Mailing</span><span>${escapeHtml(l.county_mail_addr || '')}, ${escapeHtml(l.county_mail_city)}, ${l.county_mail_state} ${l.county_mail_zip || ''}</span></div>` : ''}
+            ${l.beds ? `<div class="row"><span>Beds/Baths</span><span>${l.beds}/${l.baths || '?'}</span></div>` : ''}
             ${l.sqft ? `<div class="row"><span>SqFt</span><span>${Number(l.sqft).toLocaleString()}</span></div>` : ''}
-            ${l.bedrooms ? `<div class="row"><span>Beds/Baths</span><span>${l.bedrooms}/${l.bathrooms || '?'}</span></div>` : ''}
-            ${l.year_built ? `<div class="row"><span>Year Built</span><span>${l.year_built}</span></div>` : ''}
+            ${l.lot_acres ? `<div class="row"><span>Acres</span><span>${l.lot_acres}</span></div>` : ''}
+            ${l.quality ? `<div class="row"><span>Quality</span><span>${l.quality}</span></div>` : ''}
             ${l.url ? `<div class="row"><a href="${l.url}" target="_blank">View Listing →</a></div>` : ''}
           </div>
         `);
@@ -163,12 +187,20 @@
       tbody.innerHTML = '';
       listings.forEach(l => {
         const rowClass = l.diff_pct !== null && l.diff_pct < 0 ? 'under' : (l.diff_pct !== null && l.diff_pct > DEAL_THRESHOLD ? 'over' : '');
+        const absentee = l.county_absentee || l.absentee_status === 'A' ? '🏠' : '';
+        const owner = l.owner_name || l.county_owner || '';
+        const badges = [];
+        if (l.county_absentee || l.absentee_status === 'A') badges.push('<span class="badge absentee">ABS</span>');
+        if (l.avm_value && l.list_price && l.avm_value >= l.list_price) badges.push('<span class="badge deal">AVM</span>');
+        if (l.county_assessed_value && l.list_price && l.county_assessed_value >= l.list_price) badges.push('<span class="badge deal">ASSESS</span>');
         tbody.innerHTML += `<tr class="${rowClass}" onclick="flyTo(${l.lat},${l.lng})">
           <td>${l.address || ''}</td>
           <td class="price">${formatPrice(l.list_price)}</td>
           <td style="text-align:right">${formatDiff(l.diff_pct)}</td>
-          <td>${l.property_type || '-'}</td>
-          <td class="price">${l.sqft ? Number(l.sqft).toLocaleString() : '-'}</td>
+          <td style="text-align:right">${formatDiff(l.avm_diff_pct)}</td>
+          <td style="text-align:right">${l.county_assessed_value ? formatPrice(l.county_assessed_value) : '-'}</td>
+          <td style="font-size:0.75rem">${escapeHtml(owner.slice(0, 20))}${absentee}</td>
+          <td>${badges.join(' ')}</td>
         </tr>`;
       });
       updateMap(listings);
@@ -216,6 +248,9 @@
       document.getElementById('stat-avg').textContent = formatPrice(stats.avg_price);
       document.getElementById('stat-range').textContent = `${formatPrice(stats.min_price)} - ${formatPrice(stats.max_price)}`;
       document.getElementById('stat-taxed').textContent = stats.with_tax_data;
+      document.getElementById('stat-county').textContent = stats.with_county_data;
+      document.getElementById('stat-absentee').textContent = stats.county_absentee_owners;
+      document.getElementById('stat-assessed').textContent = stats.at_or_below_assessed;
       document.getElementById('stat-deals').textContent = stats.deals_15pct;
     }
 
