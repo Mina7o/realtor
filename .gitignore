@@ -5,3 +5,5 @@ venv/
 .opencode/
 openspec/
 county_parcels_full.db
+*.db-shm
+*.db-wal

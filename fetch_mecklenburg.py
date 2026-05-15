@@ -1,8 +1,16 @@
 import os
 import sys
 import time
+import sqlite3
 import requests
-from db import get_conn
+
+COUNTY_DB = os.path.join(os.path.dirname(__file__), 'county_parcels_full.db')
+
+def get_county_conn():
+    conn = sqlite3.connect(COUNTY_DB)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=OFF")
+    return conn
 
 API_URL = (
     "https://meckgis.mecklenburgcountync.gov/server/rest/services/"
@@ -23,7 +31,7 @@ FIELDS = [
 ]
 
 def ensure_table():
-    conn = get_conn()
+    conn = get_county_conn()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS mecklenburg_parcels (
             pid TEXT PRIMARY KEY,
@@ -142,7 +150,7 @@ def main():
     else:
         print("Starting fresh download")
 
-    conn = get_conn()
+    conn = get_county_conn()
     page = 0
     errors = 0
     max_errors = 10
