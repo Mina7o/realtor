@@ -2,6 +2,6 @@ __pycache__/
 *.pyc
 venv/
 .env
-deals.db
 .opencode/
 openspec/
+county_parcels_full.db
