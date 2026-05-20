@@ -47,13 +47,39 @@ CREATE TABLE IF NOT EXISTS listings (
     mls_id TEXT,
     rentcast_id TEXT,
     url TEXT,
-    fetched_at TEXT DEFAULT (datetime('now'))
+    fetched_at TEXT DEFAULT (datetime('now')),
+    zestimate REAL,
+    last_seen_at TEXT,
+    broker_name TEXT,
+    img_url TEXT,
+    status_text TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_listings_property_source ON listings(property_id, source);
+
+CREATE TABLE IF NOT EXISTS property_details (
+    property_id INTEGER PRIMARY KEY REFERENCES properties(id),
+    bedrooms INTEGER,
+    bathrooms REAL,
+    sqft REAL,
+    year_built INTEGER,
+    lot_sqft REAL,
+    property_type TEXT,
+    updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS price_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id INTEGER REFERENCES listings(id),
+    property_id INTEGER REFERENCES properties(id),
+    old_price REAL,
+    new_price REAL,
+    source TEXT,
+    detected_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_properties_addr ON properties(normalized_address);
 CREATE INDEX IF NOT EXISTS idx_tax_property ON tax_records(property_id);
-CREATE INDEX IF NOT EXISTS idx_listings_property ON listings(property_id);
-CREATE INDEX IF NOT EXISTS idx_listings_price ON listings(list_price);
 
 CREATE TABLE IF NOT EXISTS attom_cache (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,4 +144,42 @@ CREATE TABLE IF NOT EXISTS listing_county_match (
     situsaddress1 TEXT,
     match_score INTEGER,
     matched_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS listing_details (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id INTEGER NOT NULL REFERENCES listings(id),
+    description TEXT,
+    hoa_fee REAL,
+    price_per_sqft REAL,
+    days_on_zillow INTEGER,
+    views INTEGER,
+    saves INTEGER,
+    agent_name TEXT,
+    agent_email TEXT,
+    agent_phone TEXT,
+    broker_name TEXT,
+    broker_phone TEXT,
+    lot_size_sqft REAL,
+    year_built INTEGER,
+    home_type TEXT,
+    photo_urls TEXT,
+    last_sold_price REAL,
+    last_sold_date TEXT,
+    raw_json TEXT,
+    fetched_at TEXT,
+    UNIQUE(listing_id)
+);
+
+CREATE TABLE IF NOT EXISTS zillow_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id INTEGER NOT NULL REFERENCES properties(id),
+    zpid TEXT,
+    zestimate REAL,
+    rent_zestimate REAL,
+    days_on_zillow INTEGER,
+    price_history TEXT,
+    raw_data TEXT,
+    fetched_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(property_id)
 );

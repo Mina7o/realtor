@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deal Analytics Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 1.5rem; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .header h1 { font-size: 1.3rem; color: #f1f5f9; }
+    .header .subtitle { color: #94a3b8; font-size: 0.85rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .card { background: #1e293b; border-radius: 10px; padding: 1rem; border: 1px solid #334155; }
+    .card h2 { font-size: 0.9rem; color: #94a3b8; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .card.full { grid-column: 1 / -1; }
+    .card.half-left { grid-column: 1; }
+    .card.half-right { grid-column: 2; }
+    .card canvas { max-height: 280px; }
+    .stat-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .stat-box { background: #0f172a; padding: 0.6rem 1rem; border-radius: 6px; border: 1px solid #334155; flex: 1; min-width: 100px; text-align: center; }
+    .stat-box .num { font-size: 1.3rem; font-weight: 700; color: #f1f5f9; }
+    .stat-box .lbl { font-size: 0.7rem; color: #64748b; text-transform: uppercase; margin-top: 0.2rem; }
+    .stat-box .num.green { color: #4ade80; }
+    .stat-box .num.amber { color: #fbbf24; }
+    .compact-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+    .compact-table th { background: #334155; padding: 0.3rem 0.4rem; text-align: left; color: #94a3b8; font-weight: 500; position: sticky; top: 0; }
+    .compact-table td { padding: 0.25rem 0.4rem; border-bottom: 1px solid #1e293b; }
+    .compact-table tr:hover { background: #1e293b; }
+    .price { font-family: monospace; text-align: right; }
+    .green { color: #4ade80; }
+    .amber { color: #fbbf24; }
+    .red { color: #f87171; }
+    .badge { display: inline-block; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.6rem; font-weight: 600; }
+    a { color: #60a5fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .loading { text-align: center; padding: 3rem; color: #64748b; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>Deal Finder Analytics</h1>
+      <div class="subtitle">Undervalued properties, price vs value, absentee hotspots</div>
+    </div>
+    <span id="status" style="font-size:0.8rem;color:#64748b">Loading...</span>
+  </div>
+
+  <div class="stat-row" id="stats-bar"></div>
+
+  <div class="grid">
+    <div class="card"><h2>Deal Tiers</h2><canvas id="chart-tiers"></canvas></div>
+    <div class="card"><h2>Discount % Distribution</h2><canvas id="chart-discount"></canvas></div>
+
+    <div class="card full">
+      <h2>Deal Quality by City <span style="font-weight:400;color:#64748b;text-transform:none">— total / undervalued / absentee</span></h2>
+      <canvas id="chart-cities"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>Absentee Rate by City</h2>
+      <canvas id="chart-absentee"></canvas>
+    </div>
+    <div class="card">
+      <h2>Price vs Market Value <span style="font-weight:400;color:#64748b;text-transform:none">— dots below line = deals</span></h2>
+      <canvas id="chart-scatter"></canvas>
+    </div>
+
+    <div class="card full" style="max-height:340px;overflow:auto">
+      <h2>Recent Price Drops</h2>
+      <table class="compact-table">
+        <thead><tr>
+          <th>Address</th><th>City</th><th class="price">Old</th><th class="price">New</th><th class="price">Drop</th><th>Date</th><th class="price">Times</th><th>Owner</th>
+        </tr></thead>
+        <tbody id="drops-body"><tr><td colspan="8" class="loading">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="card half-left" style="max-height:340px;overflow:auto">
+      <h2>Best Undervalued Deals</h2>
+      <table class="compact-table">
+        <thead><tr>
+          <th>Address</th><th class="price">List</th><th class="price">Mkt Val</th><th class="price">Disc</th><th>Acres</th>
+        </tr></thead>
+        <tbody id="deals-body"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="card half-right" style="max-height:340px;overflow:auto">
+      <h2>Top Brokers</h2>
+      <table class="compact-table">
+        <thead><tr><th>Broker</th><th class="price">Listings</th></tr></thead>
+        <tbody id="brokers-body"><tr><td colspan="2" class="loading">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const API = '';
+    let charts = {};
+
+    async function load() {
+      try {
+        const resp = await fetch(API + '/api/charts');
+        const d = await resp.json();
+        document.getElementById('status').textContent = 'Updated ' + new Date().toLocaleTimeString();
+        renderStats(d);
+        renderTiers(d.tiers);
+        renderDiscountDist(d.deals);
+        renderCities(d.cities);
+        renderAbsenteeRate(d.cities);
+        renderScatter(d.deals);
+        renderDrops(d.price_drops);
+        renderDeals(d.undervalued);
+        renderBrokers(d.top_brokers);
+      } catch (e) {
+        document.getElementById('status').textContent = 'Error: ' + e.message;
+      }
+    }
+
+    function renderStats(d) {
+      const t = d.tiers;
+      const total = d.total_with_value || 0;
+      const pct = total ? Math.round(t.undervalued / total * 100) : 0;
+      document.getElementById('stats-bar').innerHTML = `
+        <div class="stat-box"><div class="num">${total.toLocaleString()}</div><div class="lbl">With Value</div></div>
+        <div class="stat-box"><div class="num green">${t.undervalued}</div><div class="lbl">Undervalued (${pct}%)</div></div>
+        <div class="stat-box"><div class="num amber">${t.premium}</div><div class="lbl">Premium</div></div>
+        <div class="stat-box"><div class="num red">${t.overpriced}</div><div class="lbl">Overpriced</div></div>
+        <div class="stat-box"><div class="num amber">${d.price_drops ? d.price_drops.length : 0}</div><div class="lbl">Price Drops</div></div>`;
+    }
+
+    function newChart(id, config) {
+      if (charts[id]) { charts[id].destroy(); }
+      const ctx = document.getElementById(id).getContext('2d');
+      charts[id] = new Chart(ctx, config);
+    }
+
+    function renderTiers(tiers) {
+      newChart('chart-tiers', {
+        type: 'doughnut',
+        data: {
+          labels: ['Undervalued', 'At Value', 'Premium', 'Overpriced'],
+          datasets: [{ data: [tiers.undervalued, tiers.at_value, tiers.premium, tiers.overpriced],
+            backgroundColor: ['#4ade80','#60a5fa','#fbbf24','#f87171'], borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { position: 'bottom', labels: { color:'#94a3b8', padding:10, font:{size:10} } } } }
+      });
+    }
+
+    function renderDiscountDist(deals) {
+      const buckets = {'<-30%':0,'-30%':0,'-20%':0,'-10%':0,'0%':0,'+10%':0,'+20%':0,'+30%':0,'+40%':0,'+50%+':0};
+      (deals || []).forEach(d => {
+        const p = d.diff_pct;
+        if (p === null || p === undefined) return;
+        if (p < -30) buckets['<-30%']++;
+        else if (p < -20) buckets['-30%']++;
+        else if (p < -10) buckets['-20%']++;
+        else if (p < 0) buckets['-10%']++;
+        else if (p < 10) buckets['0%']++;
+        else if (p < 20) buckets['+10%']++;
+        else if (p < 30) buckets['+20%']++;
+        else if (p < 40) buckets['+30%']++;
+        else if (p < 50) buckets['+40%']++;
+        else buckets['+50%+']++;
+      });
+      const labels = Object.keys(buckets);
+      const vals = Object.values(buckets);
+      const colors = labels.map(l => l.startsWith('-') ? '#4ade80' : l === '0%' ? '#60a5fa' : '#f87171');
+      newChart('chart-discount', {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Properties', data: vals, backgroundColor: colors, borderRadius: 3 }] },
+        options: { responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { color:'#64748b', font:{size:9} }, grid: { display: false } },
+                   y: { ticks: { color:'#64748b', font:{size:10} }, grid: { color:'#1e293b' }, beginAtZero: true } } }
+      });
+    }
+
+    function renderCities(cities) {
+      if (!cities || !cities.length) return;
+      newChart('chart-cities', {
+        type: 'bar',
+        data: {
+          labels: cities.map(c => c.city),
+          datasets: [
+            { label: 'Total', data: cities.map(c => c.total), backgroundColor: '#334155', borderRadius: 3 },
+            { label: 'Undervalued', data: cities.map(c => c.undervalued), backgroundColor: '#4ade80', borderRadius: 3 },
+            { label: 'Absentee', data: cities.map(c => c.absentee), backgroundColor: '#fbbf24', borderRadius: 3 },
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { position: 'top', labels: { color:'#94a3b8', boxWidth:12, padding:8, font:{size:10} } } },
+          scales: { x: { ticks: { color:'#64748b', font:{size:10} }, grid: { display: false } },
+                   y: { beginAtZero: true, ticks: { color:'#64748b', font:{size:10} }, grid: { color:'#1e293b' } } } }
+      });
+    }
+
+    function renderAbsenteeRate(cities) {
+      if (!cities || !cities.length) return;
+      const labels = cities.map(c => c.city);
+      const rates = cities.map(c => c.total ? Math.round(c.absentee / c.total * 100) : 0);
+      newChart('chart-absentee', {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Absentee %', data: rates, backgroundColor: rates.map(r => r > 20 ? '#f87171' : r > 10 ? '#fbbf24' : '#4ade80'), borderRadius: 3 }] },
+        options: { responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { color:'#64748b', font:{size:10} }, grid: { display: false } },
+                   y: { beginAtZero: true, max: 100, ticks: { color:'#64748b', font:{size:10}, callback: v => v+'%' }, grid: { color:'#1e293b' } } } }
+      });
+    }
+
+    function renderScatter(deals) {
+      if (!deals || !deals.length) return;
+      const undervalued = deals.filter(d => d.diff_pct < 0).map(d => ({ x: d.market_value, y: d.list_price }));
+      const overvalued = deals.filter(d => d.diff_pct >= 0).map(d => ({ x: d.market_value, y: d.list_price }));
+      newChart('chart-scatter', {
+        type: 'scatter',
+        data: {
+          datasets: [
+            { label: 'Undervalued', data: undervalued, backgroundColor: '#4ade80', pointRadius: 3 },
+            { label: 'At/Above Value', data: overvalued, backgroundColor: '#475569', pointRadius: 2 },
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { position: 'top', labels: { color:'#94a3b8', boxWidth:12, padding:8, font:{size:10} } } },
+          scales: {
+            x: { title: { display: true, text: 'Market Value ($)', color: '#64748b', font:{size:10} },
+                 ticks: { color:'#64748b', font:{size:9}, callback: v => '$'+(v/1000)+'k' }, grid: { color:'#1e293b' } },
+            y: { title: { display: true, text: 'List Price ($)', color: '#64748b', font:{size:10} },
+                 ticks: { color:'#64748b', font:{size:9}, callback: v => '$'+(v/1000)+'k' }, grid: { color:'#1e293b' } }
+          }
+        }
+      });
+    }
+
+    function renderDrops(drops) {
+      if (!drops || !drops.length) {
+        document.getElementById('drops-body').innerHTML = '<tr><td colspan="8" style="text-align:center;color:#64748b;padding:1rem">None</td></tr>';
+        return;
+      }
+      document.getElementById('drops-body').innerHTML = drops.map(d => {
+        const amt = d.old_price - d.new_price;
+        const pct = d.old_price ? Math.round(amt / d.old_price * 100) : 0;
+        return `<tr>
+          <td>${d.url ? `<a href="${d.url}" target="_blank">${esc(d.address)}</a>` : esc(d.address)}</td>
+          <td>${esc(d.city)}</td>
+          <td class="price">$${d.old_price.toLocaleString()}</td>
+          <td class="price">$${d.new_price.toLocaleString()}</td>
+          <td class="price green">-$${amt.toLocaleString()} (${pct}%)</td>
+          <td>${d.detected_at || '-'}</td>
+          <td class="price">${esc(d.times || '')}</td>
+          <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${esc(d.owner_name || '')}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderDeals(deals) {
+      const tbody = document.getElementById('deals-body');
+      if (!deals || !deals.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;padding:1rem">None</td></tr>';
+        return;
+      }
+      tbody.innerHTML = deals.map(d => `<tr>
+        <td>${d.url ? `<a href="${d.url}" target="_blank">${esc(d.address)}</a>` : esc(d.address)}</td>
+        <td class="price">$${d.list_price.toLocaleString()}</td>
+        <td class="price">$${d.market_value.toLocaleString()}</td>
+        <td class="price green">${d.diff_pct}%</td>
+        <td>${d.acres ? d.acres+'a' : '-'}</td>
+      </tr>`).join('');
+    }
+
+    function renderBrokers(brokers) {
+      const tbody = document.getElementById('brokers-body');
+      if (!brokers || !brokers.length) {
+        tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#64748b;padding:1rem">None</td></tr>';
+        return;
+      }
+      tbody.innerHTML = brokers.map(b => `<tr>
+        <td style="font-weight:600">${esc(b.name)}</td>
+        <td class="price" style="color:#60a5fa">${b.count}</td>
+      </tr>`).join('');
+    }
+
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    load();
+  </script>
+</body>
+</html>

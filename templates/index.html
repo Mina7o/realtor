@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NC/SC Property Deals Dashboard</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -19,25 +22,31 @@
     .stat-card .value.blue { color: #60a5fa; }
     .stat-card .value.amber { color: #fbbf24; }
     .main { display: flex; height: calc(100vh - 140px); }
-    .map-panel { flex: 1; min-width: 0; }
+    .map-panel { flex: 1; min-width: 0; transition: flex 0.2s; }
+    .map-panel.shrink { flex: 0.5; }
     #map { height: 100%; width: 100%; }
-    .table-panel { width: 480px; overflow-y: auto; background: #1e293b; border-left: 1px solid #334155; }
-    .table-panel .toolbar { padding: 0.75rem; display: flex; gap: 0.5rem; border-bottom: 1px solid #334155; flex-wrap: wrap; }
-    .table-panel .toolbar input, .table-panel .toolbar select { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 0.4rem 0.6rem; border-radius: 4px; font-size: 0.8rem; }
-    .table-panel .toolbar button { background: #3b82f6; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+    .table-panel { width: 520px; overflow-y: auto; background: #1e293b; border-left: 1px solid #334155; transition: width 0.2s; }
+    .table-panel.wide { width: 620px; }
+    .table-panel .toolbar { padding: 0.5rem; display: flex; gap: 0.35rem; border-bottom: 1px solid #334155; flex-wrap: wrap; align-items: center; }
+    .table-panel .toolbar input, .table-panel .toolbar select { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 0.3rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+    .table-panel .toolbar button { background: #3b82f6; color: white; border: none; padding: 0.3rem 0.6rem; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
     .table-panel .toolbar button:hover { background: #2563eb; }
     .table-panel .toolbar button:disabled { background: #475569; cursor: not-allowed; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-    th { position: sticky; top: 0; background: #334155; padding: 0.5rem; text-align: left; cursor: pointer; color: #94a3b8; font-weight: 500; }
+    .table-panel .filter-count { font-size: 0.7rem; color: #64748b; padding: 0 0.25rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    th { position: sticky; top: 0; background: #334155; padding: 0.4rem 0.4rem; text-align: left; cursor: pointer; color: #94a3b8; font-weight: 500; white-space: nowrap; }
     th:hover { color: #f1f5f9; }
-    td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #1e293b; }
+    td { padding: 0.35rem 0.4rem; border-bottom: 1px solid #1e293b; white-space: nowrap; }
     tr:hover { background: #334155; }
     .price { font-family: monospace; text-align: right; }
     .deal-badge { background: #166534; color: #86efac; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.7rem; white-space: nowrap; }
     .no-deal { color: #94a3b8; font-size: 0.7rem; }
-    .badge { display:inline-block; padding:0.1rem 0.35rem; border-radius:3px; font-size:0.65rem; font-weight:600; }
+    .badge { display:inline-block; padding:0.1rem 0.3rem; border-radius:3px; font-size:0.6rem; font-weight:600; line-height:1.2; }
     .badge.absentee { background:#92400e; color:#fbbf24; }
-    .badge.deal { background:#166534; color:#86efac; }
+    .badge.tax { background:#1e3a5f; color:#93c5fd; }
+    .badge.county { background:#3b0764; color:#c4b5fd; }
+    .badge.attom { background:#1a3a2a; color:#86efac; }
+    .badge.zest { background:#3a2a1a; color:#fbbf24; }
     .under { background: #16653433; }
     .over { background: #7c2d1233; }
     .loading { text-align: center; padding: 2rem; color: #94a3b8; }
@@ -45,6 +54,18 @@
     .popup-content { font-size: 0.8rem; min-width: 200px; }
     .popup-content h3 { font-size: 0.9rem; margin-bottom: 0.4rem; }
     .popup-content .row { display: flex; justify-content: space-between; padding: 0.15rem 0; }
+    .detail-panel { width: 0; overflow: hidden; background: #1e293b; border-left: 1px solid #334155; transition: width 0.2s; }
+    .detail-panel.open { width: 380px; }
+    .detail-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #334155; }
+    .detail-header h3 { font-size: 0.9rem; color: #f1f5f9; }
+    #detail-content { padding: 1rem; overflow-y: auto; height: calc(100% - 50px); font-size: 0.8rem; }
+    #detail-content .row { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #1e293b; }
+    #detail-content .row .label { color: #94a3b8; }
+    #detail-content .row .val { color: #f1f5f9; font-weight: 500; }
+    .detail-img { width: 100%; height: 200px; object-fit: cover; border-radius: 6px; margin-bottom: 0.75rem; background: #0f172a; }
+    .badge.new { background:#065f46; color:#6ee7b7; }
+    .badge.drop { background:#7c2d12; color:#fca5a5; }
+    .badge.acres { background:#1e3a5f; color:#93c5fd; }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #1e293b; }
     ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
@@ -54,35 +75,70 @@
   <div class="header">
     <div>
       <h1>NC/SC Property Deals Dashboard</h1>
-      <span>Active listings matched against tax assessed values</span>
+      <span>Listings matched against tax values, ATTOM, Zestimates</span>
     </div>
     <div style="display:flex;gap:0.75rem;align-items:center">
-      <span id="api-status" style="font-size:0.8rem;color:#94a3b8">RentCast API: 45 calls remaining</span>
+      <button id="toggle-mode" onclick="toggleMode()" style="background:#3b82f6;color:white;border:none;padding:0.35rem 0.7rem;border-radius:4px;cursor:pointer;font-size:0.8rem">Interactive</button>
+      <button id="btn-charts" onclick="toggleCharts()" style="background:#8b5cf6;color:white;border:none;padding:0.35rem 0.7rem;border-radius:4px;cursor:pointer;font-size:0.8rem">Charts</button>
+      <span id="api-status" style="font-size:0.8rem;color:#94a3b8"></span>
     </div>
   </div>
   <div class="stats-bar" id="stats-bar">
-    <div class="stat-card"><div class="label">Total Listings</div><div class="value blue" id="stat-total">-</div></div>
+    <div class="stat-card"><div class="label">Total</div><div class="value blue" id="stat-total">-</div></div>
     <div class="stat-card"><div class="label">Avg Price</div><div class="value" id="stat-avg">-</div></div>
-    <div class="stat-card"><div class="label">Price Range</div><div class="value" id="stat-range">-</div></div>
-    <div class="stat-card"><div class="label">With Tax Data</div><div class="value amber" id="stat-taxed">-</div></div>
-    <div class="stat-card"><div class="label">With County Data</div><div class="value blue" id="stat-county">-</div></div>
-    <div class="stat-card"><div class="label">County Absentee</div><div class="value amber" id="stat-absentee">-</div></div>
-    <div class="stat-card"><div class="label">At or Below Assessed</div><div class="value green" id="stat-assessed">-</div></div>
-    <div class="stat-card"><div class="label">Deals ≤15%</div><div class="value green" id="stat-deals">-</div></div>
+    <div class="stat-card"><div class="label">With Mkt Value</div><div class="value green" id="stat-taxed">-</div></div>
+    <div class="stat-card"><div class="label">Absentee</div><div class="value amber" id="stat-absentee">-</div></div>
+    <div class="stat-card"><div class="label">Undervalued</div><div class="value green" id="stat-assessed">-</div></div>
+    <div class="stat-card"><div class="label">In Premium</div><div class="value amber" id="stat-deals">-</div></div>
+    <div class="stat-card"><div class="label">Overpriced</div><div class="value" id="stat-overpriced" style="color:#f87171">-</div></div>
   </div>
   <div class="main">
     <div class="map-panel"><div id="map"></div></div>
     <div class="table-panel">
-      <div class="toolbar">
-        <input type="text" id="search" placeholder="Search address..." style="flex:1" oninput="filterTable()">
-        <select id="deal-filter" onchange="filterTable()">
-          <option value="all">All</option>
-          <option value="under">Under tax value</option>
-          <option value="within15">Within 15% of tax</option>
-          <option value="over">Over tax value</option>
-          <option value="no_tax">No tax data</option>
+      <div class="toolbar" id="filter-bar">
+        <select id="filter-source" onchange="fetchData()">
+          <option value="all">All Sources</option>
+          <option value="zillow">Zillow</option>
+          <option value="fsbo">FSBO</option>
+          <option value="rentcast">RentCast</option>
         </select>
-        <button onclick="enrichBatch()" id="enrich-btn">Enrich Tax</button>
+        <select id="filter-tier" onchange="fetchData()">
+          <option value="all">All Tiers</option>
+          <option value="undervalued">Undervalued</option>
+          <option value="at_value">At Value</option>
+          <option value="premium">Premium</option>
+          <option value="overpriced">Overpriced</option>
+        </select>
+        <select id="filter-absentee" onchange="fetchData()">
+          <option value="all">All Owners</option>
+          <option value="yes">Absentee</option>
+          <option value="no">Owner Occupied</option>
+        </select>
+        <select id="filter-hasval" onchange="fetchData()">
+          <option value="all">All</option>
+          <option value="yes">Has Mkt Val</option>
+          <option value="no">No Mkt Val</option>
+        </select>
+        <input type="text" id="filter-pmin" placeholder="Min $" style="width:65px" onchange="fetchData()">
+        <input type="text" id="filter-pmax" placeholder="Max $" style="width:65px" onchange="fetchData()">
+        <select id="filter-city" onchange="fetchData()" style="max-width:110px">
+          <option value="">All Cities</option>
+          <option value="Waxhaw">Waxhaw</option>
+          <option value="Weddington">Weddington</option>
+          <option value="Indian Trail">Indian Trail</option>
+          <option value="Monroe">Monroe</option>
+          <option value="Fort Mill">Fort Mill</option>
+          <option value="Charlotte">Charlotte</option>
+          <option value="Matthews">Matthews</option>
+          <option value="Mint Hill">Mint Hill</option>
+          <option value="Greensboro">Greensboro</option>
+        </select>
+        <input type="text" id="filter-acres" placeholder="Min acres" style="width:70px" onchange="fetchData()">
+        <input type="text" id="filter-sqft" placeholder="Min sqft" style="width:65px" onchange="fetchData()">
+        <input type="text" id="search" placeholder="Search address..." style="flex:1;min-width:80px" oninput="debouncedFetch()">
+        <button onclick="exportCSV()" title="Export to CSV">CSV</button>
+        <span class="filter-count" id="filter-count"></span>
+        <span id="owner-badge" style="display:none;background:#1e3a5f;color:#93c5fd;padding:0.2rem 0.4rem;border-radius:4px;font-size:0.7rem;cursor:pointer" onclick="clearOwnerFilter()"></span>
       </div>
       <div style="overflow-y:auto;height:calc(100% - 44px)" id="table-container">
         <table id="listings-table">
@@ -90,25 +146,107 @@
             <tr>
               <th onclick="sortBy('address')">Address</th>
               <th onclick="sortBy('list_price')" style="text-align:right">Price</th>
-              <th onclick="sortBy('diff_pct')" style="text-align:right">vs Tax</th>
-              <th onclick="sortBy('avm_diff_pct')" style="text-align:right">vs AVM</th>
-              <th onclick="sortBy('county_assessed_value')" style="text-align:right">vs Assessed</th>
+              <th onclick="sortBy('market_value')" style="text-align:right">Mkt Value</th>
+              <th onclick="sortBy('diff_pct')" style="text-align:right">vs Mkt</th>
+              <th onclick="sortBy('acres')" style="text-align:right;display:none" class="col-xl">Acres</th>
+              <th onclick="sortBy('sqft_show')" style="text-align:right;display:none" class="col-xl">Sqft</th>
               <th onclick="sortBy('owner_name')">Owner</th>
-              <th>Status</th>
+              <th>Link</th>
+              <th>Flags</th>
             </tr>
           </thead>
           <tbody id="listings-body">
-            <tr><td colspan="5" class="loading">Loading...</td></tr>
+            <tr><td colspan="9" class="loading">Loading...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
+    <div class="detail-panel" id="detail-panel">
+      <div class="detail-header">
+        <h3 id="detail-title">Property Details</h3>
+        <button onclick="closeDetail()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:1.2rem">✕</button>
+      </div>
+      <div id="detail-content"></div>
+    </div>
   </div>
+
+  <div id="charts-view" style="padding:1rem">
+    <div class="stat-row" id="charts-stats" style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem"></div>
+    <div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="card" style="background:#1e293b;border-radius:10px;padding:1rem;border:1px solid #334155">
+        <h2 style="font-size:0.9rem;color:#94a3b8;margin-bottom:0.75rem;text-transform:uppercase">Deal Tiers</h2>
+        <canvas id="chart-tiers" style="max-height:240px"></canvas>
+      </div>
+      <div class="card" style="background:#1e293b;border-radius:10px;padding:1rem;border:1px solid #334155">
+        <h2 style="font-size:0.9rem;color:#94a3b8;margin-bottom:0.75rem;text-transform:uppercase">Listing Age</h2>
+        <canvas id="chart-age" style="max-height:240px"></canvas>
+      </div>
+      <div class="card" style="background:#1e293b;border-radius:10px;padding:1rem;border:1px solid #334155;grid-column:1/-1">
+        <h2 style="font-size:0.9rem;color:#94a3b8;margin-bottom:0.75rem;text-transform:uppercase">Deal Quality by City</h2>
+        <canvas id="chart-cities" style="max-height:260px"></canvas>
+      </div>
+      <div class="card" style="background:#1e293b;border-radius:10px;padding:1rem;border:1px solid #334155;grid-column:1/-1;max-height:380px;overflow:auto">
+        <h2 style="font-size:0.9rem;color:#94a3b8;margin-bottom:0.75rem;text-transform:uppercase">Recent Price Drops <span style="font-weight:400;color:#fca5a5;text-transform:none">motivated sellers</span></h2>
+        <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+          <thead><tr>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:left;color:#94a3b8;font-weight:500;position:sticky;top:0">Address</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:left;color:#94a3b8;font-weight:500;position:sticky;top:0">City</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:right;color:#94a3b8;font-weight:500;position:sticky;top:0">Old Price</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:right;color:#94a3b8;font-weight:500;position:sticky;top:0">New Price</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:right;color:#94a3b8;font-weight:500;position:sticky;top:0">Drop</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:left;color:#94a3b8;font-weight:500;position:sticky;top:0">Date</th>
+          </tr></thead>
+          <tbody id="charts-drops-body"></tbody>
+        </table>
+      </div>
+      <div class="card" style="background:#1e293b;border-radius:10px;padding:1rem;border:1px solid #334155;grid-column:1/-1;max-height:380px;overflow:auto">
+        <h2 style="font-size:0.9rem;color:#94a3b8;margin-bottom:0.75rem;text-transform:uppercase">Best Undervalued Deals</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+          <thead><tr>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:left;color:#94a3b8;font-weight:500;position:sticky;top:0">Address</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:left;color:#94a3b8;font-weight:500;position:sticky;top:0">City</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:right;color:#94a3b8;font-weight:500;position:sticky;top:0">List Price</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:right;color:#94a3b8;font-weight:500;position:sticky;top:0">Mkt Value</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:right;color:#94a3b8;font-weight:500;position:sticky;top:0">Discount</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:left;color:#94a3b8;font-weight:500;position:sticky;top:0">Age</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:left;color:#94a3b8;font-weight:500;position:sticky;top:0">Acres</th>
+          </tr></thead>
+          <tbody id="charts-deals-body"></tbody>
+        </table>
+      </div>
+      <div class="card" style="background:#1e293b;border-radius:10px;padding:1rem;border:1px solid #334155;grid-column:1/-1;max-height:360px;overflow:auto">
+        <h2 style="font-size:0.9rem;color:#94a3b8;margin-bottom:0.75rem;text-transform:uppercase">Top Brokers by Inventory</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+          <thead><tr>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:left;color:#94a3b8;font-weight:500;position:sticky;top:0">Broker</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:right;color:#94a3b8;font-weight:500;position:sticky;top:0">Listings</th>
+          </tr></thead>
+          <tbody id="charts-brokers-body"></tbody>
+        </table>
+      </div>
+      <div class="card" style="background:#1e293b;border-radius:10px;padding:1rem;border:1px solid #334155;grid-column:1/-1;max-height:360px;overflow:auto">
+        <h2 style="font-size:0.9rem;color:#94a3b8;margin-bottom:0.75rem;text-transform:uppercase">Property Owners (multi-property) <span style="font-weight:400;color:#93c5fd;text-transform:none">portfolio sellers</span></h2>
+        <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+          <thead><tr>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:left;color:#94a3b8;font-weight:500;position:sticky;top:0">Owner</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:right;color:#94a3b8;font-weight:500;position:sticky;top:0">Properties</th>
+            <th style="background:#334155;padding:0.3rem 0.4rem;text-align:left;color:#94a3b8;font-weight:500;position:sticky;top:0">Addresses</th>
+          </tr></thead>
+          <tbody id="charts-owners-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script>
     const DEAL_THRESHOLD = 15;
     let map, markersLayer, allListings = [], filteredListings = [];
-    let sortField = 'list_price', sortAsc = false;
+    let sortField = 'diff_pct', sortAsc = false;
+    let fetchTimer = null;
+    let showCharts = false;
+    let chartInstances = {};
 
     function initMap() {
       map = L.map('map', { zoomControl: true }).setView([35.2271, -80.8431], 12);
@@ -144,6 +282,13 @@
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    function sourceBadge(src) {
+      const labels = { tax: 'tax', county: 'cnt', attom: 'avm', zest: 'zest' };
+      const cls = labels[src] || '';
+      if (!cls) return '';
+      return `<span class="badge ${cls}">${labels[src]}</span>`;
+    }
+
     function updateMap(listings) {
       markersLayer.clearLayers();
       listings.forEach(l => {
@@ -153,28 +298,29 @@
           radius: 7, fillColor: color, color: '#fff',
           weight: 1, opacity: 1, fillOpacity: 0.8
         });
-        const taxStr = l.tax_value ? `$${Number(l.tax_value).toLocaleString()}` : 'N/A';
-        const diffStr = l.diff_pct !== null && l.diff_pct !== undefined ? `${l.diff_pct > 0 ? '+' : ''}${l.diff_pct.toFixed(1)}%` : 'N/A';
-        const absenteeBadge = (l.county_absentee || l.absentee_status === 'A') ? '<span style="background:#92400e;color:#fbbf24;padding:0 4px;border-radius:3px;font-size:0.7rem">ABSENTEE</span>' : '';
-        const ownerName = l.owner_name || l.county_owner || 'N/A';
-        const avmStr = l.avm_value ? `${formatPrice(l.avm_value)}${l.avm_diff_pct !== null ? ' (' + (l.avm_diff_pct > 0 ? '+' : '') + l.avm_diff_pct.toFixed(1) + '%)' : ''}` : 'N/A';
-        const assessedStr = l.county_assessed_value ? formatPrice(l.county_assessed_value) : (l.assessed_value ? formatPrice(l.assessed_value) : 'N/A');
-        const lastSale = l.county_last_sale_price ? `${formatPrice(l.county_last_sale_price)} (${l.county_last_sale_date || '?'})` : 'N/A';
+        const mv = l.market_value;
+        const mvStr = mv ? formatPrice(mv) : 'N/A';
+        const diffStr = l.diff_pct !== null ? `${l.diff_pct > 0 ? '+' : ''}${l.diff_pct.toFixed(1)}%` : 'N/A';
+        const absentee = l.is_absentee ? '<span class="badge absentee">ABSENTEE</span>' : '';
+        const owner = l.owner_name || l.county_owner || l.union_owner || l.york_owner || 'N/A';
+        const avmStr = l.avm_value ? formatPrice(l.avm_value) : 'N/A';
+        const assessedStr = l.union_fmv ? formatPrice(l.union_fmv) : (l.york_fmv ? formatPrice(l.york_fmv) : (l.county_assessed_value ? formatPrice(l.county_assessed_value) : (l.assessed_value ? formatPrice(l.assessed_value) : 'N/A')));
+        const zestStr = l.zestimate ? formatPrice(l.zestimate) : 'N/A';
+        const srcBadge = sourceBadge(l.value_source);
         marker.bindPopup(`
           <div class="popup-content">
             <h3>${escapeHtml(l.address || '')}</h3>
             <div class="row"><span>List Price</span><strong>${formatPrice(l.list_price)}</strong></div>
+            <div class="row"><span>Market Value ${srcBadge}</span><strong>${mvStr}</strong></div>
+            <div class="row"><span>Diff</span><span>${diffStr}</span></div>
+            <hr style="border-color:#334155;margin:4px 0">
+            <div class="row"><span>Zestimate</span><span>${zestStr}</span></div>
             <div class="row"><span>ATTOM AVM</span><span>${avmStr}</span></div>
             <div class="row"><span>County Assessed</span><span>${assessedStr}</span></div>
-            ${l.county_land_value ? `<div class="row"><span>Land/Building</span><span>${formatPrice(l.county_land_value)} / ${formatPrice(l.county_building_value)}</span></div>` : ''}
-            <div class="row"><span>Last Sale</span><span>${lastSale}</span></div>
-            <div class="row"><span>County Use</span><span>${escapeHtml(l.county_property_use || 'N/A')}</span></div>
-            <div class="row"><span>Owner</span><span>${escapeHtml(ownerName)} ${absenteeBadge}</span></div>
-            ${l.county_mail_city ? `<div class="row"><span>Mailing</span><span>${escapeHtml(l.county_mail_addr || '')}, ${escapeHtml(l.county_mail_city)}, ${l.county_mail_state} ${l.county_mail_zip || ''}</span></div>` : ''}
-            ${l.beds ? `<div class="row"><span>Beds/Baths</span><span>${l.beds}/${l.baths || '?'}</span></div>` : ''}
-            ${l.sqft ? `<div class="row"><span>SqFt</span><span>${Number(l.sqft).toLocaleString()}</span></div>` : ''}
-            ${l.lot_acres ? `<div class="row"><span>Acres</span><span>${l.lot_acres}</span></div>` : ''}
-            ${l.quality ? `<div class="row"><span>Quality</span><span>${l.quality}</span></div>` : ''}
+            ${l.union_fmv_land || l.york_fmv_land || l.county_land_value ?`<div class="row"><span>Land/Build</span><span>${formatPrice(l.union_fmv_land||l.york_fmv_land||l.county_land_value)} / ${formatPrice(l.union_fmv_building||l.york_fmv_building||l.county_building_value)}</span></div>`:''}
+            <div class="row"><span>Last Sale</span><span>${l.union_last_sale_price ? formatPrice(l.union_last_sale_price)+' ('+(l.union_last_sale_date||'?')+')' : (l.york_last_sale_price ? formatPrice(l.york_last_sale_price)+' ('+(l.york_last_sale_date||'?')+')' : (l.county_last_sale_price ? formatPrice(l.county_last_sale_price)+' ('+(l.county_last_sale_date||'?')+')' : 'N/A'))}</span></div>
+            <div class="row"><span>Owner</span><span>${escapeHtml(owner)} ${absentee}</span></div>
+            ${l.union_mail_city ? `<div class="row"><span>Mailing</span><span>${escapeHtml(l.union_mail_city||'')} ${l.union_mail_state||''} ${l.union_mail_zip||''}</span></div>` : (l.york_mail_city ? `<div class="row"><span>Mailing</span><span>${escapeHtml(l.york_mail_city||'')} ${l.york_mail_state||''} ${l.york_mail_zip||''}</span></div>` : (l.county_mail_city ? `<div class="row"><span>Mailing</span><span>${escapeHtml(l.county_mail_addr||'')}, ${escapeHtml(l.county_mail_city)} ${l.county_mail_state||''} ${l.county_mail_zip||''}</span></div>` : ''))}
             ${l.url ? `<div class="row"><a href="${l.url}" target="_blank">View Listing →</a></div>` : ''}
           </div>
         `);
@@ -182,43 +328,241 @@
       });
     }
 
+    let interactiveMode = false;
+
+    function toggleMode() {
+      interactiveMode = !interactiveMode;
+      const btn = document.getElementById('toggle-mode');
+      btn.textContent = interactiveMode ? 'Map View' : 'Interactive';
+      btn.style.background = interactiveMode ? '#475569' : '#3b82f6';
+      document.querySelector('.map-panel').classList.toggle('shrink', interactiveMode);
+      document.querySelector('.table-panel').classList.toggle('wide', interactiveMode);
+      document.querySelectorAll('.col-xl').forEach(el => el.style.display = interactiveMode ? '' : 'none');
+      if (!interactiveMode) closeDetail();
+      renderTable(filteredListings);
+    }
+
+    function showDetail(l) {
+      if (!interactiveMode) {
+        flyTo(l.lat, l.lng);
+        return;
+      }
+      const panel = document.getElementById('detail-panel');
+      const content = document.getElementById('detail-content');
+      panel.classList.add('open');
+      const owner = l.owner_name || l.county_owner || l.union_owner || l.york_owner || 'N/A';
+      const acres = getAcres(l);
+      const sqft = getSqft(l);
+      const absentee = l.is_absentee ? 'YES' : 'NO';
+      const img = l.img_url ? `<img class="detail-img" src="${l.img_url}" alt="Property">` : '';
+      content.innerHTML = `
+        ${img}
+        <h3 style="margin-bottom:0.5rem">${escapeHtml(l.address || '')}</h3>
+        <div class="row"><span class="label">List Price</span><span class="val">${formatPrice(l.list_price)}</span></div>
+        <div class="row"><span class="label">Market Value</span><span class="val">${l.market_value ? formatPrice(l.market_value) : 'N/A'} ${sourceBadge(l.value_source)}</span></div>
+        <div class="row"><span class="label">Diff</span><span class="val">${l.diff_pct !== null ? (l.diff_pct > 0 ? '+' : '') + l.diff_pct.toFixed(1) + '%' : 'N/A'}</span></div>
+        <div class="row"><span class="label">Source</span><span class="val">${l.source || 'N/A'}</span></div>
+        ${acres ? `<div class="row"><span class="label">Acres</span><span class="val">${acres}</span></div>` : ''}
+        ${sqft ? `<div class="row"><span class="label">Sqft</span><span class="val">${Number(sqft).toLocaleString()}</span></div>` : ''}
+        ${l.prop_bedrooms ? `<div class="row"><span class="label">Beds / Baths</span><span class="val">${l.prop_bedrooms} / ${l.prop_bathrooms || '?'}</span></div>` : ''}
+        ${l.prop_year_built ? `<div class="row"><span class="label">Year Built</span><span class="val">${l.prop_year_built}</span></div>` : ''}
+        ${l.prop_type ? `<div class="row"><span class="label">Type</span><span class="val">${l.prop_type}</span></div>` : ''}
+        ${l.broker_name ? `<div class="row"><span class="label">Broker</span><span class="val">${escapeHtml(l.broker_name)}</span></div>` : ''}
+        <div class="row"><span class="label">Owner</span><span class="val">${escapeHtml(owner)}</span></div>
+        <div class="row"><span class="label">Absentee</span><span class="val">${absentee}</span></div>
+        ${l.union_fmv ? `<div class="row"><span class="label">Union FMV</span><span class="val">${formatPrice(l.union_fmv)} ${l.union_fmv_land ? '(L:'+formatPrice(l.union_fmv_land)+' B:'+formatPrice(l.union_fmv_building)+')' : ''}</span></div>` : ''}
+        ${l.union_last_sale_price ? `<div class="row"><span class="label">Union Lst Sale</span><span class="val">${formatPrice(l.union_last_sale_price)} (${l.union_last_sale_date || '?'}) ${l.union_deed_type ? '['+l.union_deed_type+']' : ''}</span></div>` : ''}
+        ${l.york_fmv ? `<div class="row"><span class="label">York FMV</span><span class="val">${formatPrice(l.york_fmv)} ${l.york_fmv_land ? '(L:'+formatPrice(l.york_fmv_land)+' B:'+formatPrice(l.york_fmv_building)+')' : ''}</span></div>` : ''}
+        ${l.york_last_sale_price ? `<div class="row"><span class="label">York Lst Sale</span><span class="val">${formatPrice(l.york_last_sale_price)} (${l.york_last_sale_date || '?'})</span></div>` : ''}
+        ${l.last_sale_price ? `<div class="row"><span class="label">Last Sale</span><span class="val">${formatPrice(l.last_sale_price)} (${l.last_sale_date || '?'})</span></div>` : ''}
+        ${l.county_property_use ? `<div class="row"><span class="label">Land Use</span><span class="val">${l.county_property_use}</span></div>` : ''}
+        ${l.url ? `<div style="margin-top:0.75rem"><a href="${l.url}" target="_blank" style="color:#60a5fa">View Listing →</a></div>` : ''}
+        <div id="price-history" style="margin-top:0.75rem"><span style="color:#64748b;font-size:0.7rem">Loading price history...</span></div>
+      `;
+
+      fetch('/api/price-history/' + l.listing_id)
+        .then(r => r.json())
+        .then(history => {
+          const el = document.getElementById('price-history');
+          if (!history || history.length === 0) {
+            el.innerHTML = '';
+            return;
+          }
+          let html = `<h4 style="color:#fbbf24;margin:0.75rem 0 0.4rem 0;font-size:0.85rem">PRICE HISTORY (${history.length} drops)</h4>`;
+          history.forEach(h => {
+            const drop = h.old_price - h.new_price;
+            const pct = h.old_price ? (drop / h.old_price * 100) : 0;
+            html += `<div style="font-size:0.75rem;padding:0.3rem 0;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between">
+              <span><span style="color:#fca5a5">↓</span> <span style="color:#94a3b8">${h.detected_at}</span></span>
+              <span style="color:#f1f5f9">$${h.old_price.toLocaleString()} → $${h.new_price.toLocaleString()}</span>
+              <span style="color:#fca5a5">-$${drop.toLocaleString()} (${pct.toFixed(0)}%)</span>
+            </div>`;
+          });
+          el.innerHTML = html;
+        });
+    }
+
+    function closeDetail() {
+      document.getElementById('detail-panel').classList.remove('open');
+    }
+
     function renderTable(listings) {
       const tbody = document.getElementById('listings-body');
       tbody.innerHTML = '';
-      listings.forEach(l => {
-        const rowClass = l.diff_pct !== null && l.diff_pct < 0 ? 'under' : (l.diff_pct !== null && l.diff_pct > DEAL_THRESHOLD ? 'over' : '');
-        const absentee = l.county_absentee || l.absentee_status === 'A' ? '🏠' : '';
-        const owner = l.owner_name || l.county_owner || '';
+      if (!listings.length) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:2rem">No listings match filters</td></tr>';
+        updateMap(listings);
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      listings.forEach((l, i) => {
+        const tr = document.createElement('tr');
+        const rowClass = l.diff_pct !== null && l.diff_pct < 0 ? 'under' : (l.diff_pct !== null && l.diff_pct > 20 ? 'over' : '');
+        if (rowClass) tr.className = rowClass;
+        tr.dataset.idx = i;
+        tr.addEventListener('click', () => showDetail(l));
+
+        const owner = l.owner_name || l.county_owner || l.union_owner || l.york_owner || '';
+        const mv = l.market_value;
         const badges = [];
-        if (l.county_absentee || l.absentee_status === 'A') badges.push('<span class="badge absentee">ABS</span>');
-        if (l.avm_value && l.list_price && l.avm_value >= l.list_price) badges.push('<span class="badge deal">AVM</span>');
-        if (l.county_assessed_value && l.list_price && l.county_assessed_value >= l.list_price) badges.push('<span class="badge deal">ASSESS</span>');
-        tbody.innerHTML += `<tr class="${rowClass}" onclick="flyTo(${l.lat},${l.lng})">
-          <td>${l.address || ''}</td>
-          <td class="price">${formatPrice(l.list_price)}</td>
-          <td style="text-align:right">${formatDiff(l.diff_pct)}</td>
-          <td style="text-align:right">${formatDiff(l.avm_diff_pct)}</td>
-          <td style="text-align:right">${l.county_assessed_value ? formatPrice(l.county_assessed_value) : '-'}</td>
-          <td style="font-size:0.75rem">${escapeHtml(owner.slice(0, 20))}${absentee}</td>
-          <td>${badges.join(' ')}</td>
-        </tr>`;
+        if (l.is_absentee) badges.push('<span class="badge absentee">ABS</span>');
+        if (l.is_new) badges.push('<span class="badge new">NEW</span>');
+        if (l.price_drop) badges.push('<span class="badge drop">↓$</span>');
+        const acres = getAcres(l);
+        if (acres && parseFloat(acres) >= 2) badges.push(`<span class="badge acres">${acres}a</span>`);
+        const sqft = getSqft(l);
+
+        const ownerLink = document.createElement('a');
+        ownerLink.href = '#';
+        ownerLink.style.cssText = 'color:#93c5fd;text-decoration:none';
+        ownerLink.textContent = owner.slice(0, 18);
+        ownerLink.addEventListener('click', (e) => {
+          e.stopPropagation();
+          filterByOwner(owner);
+        });
+
+        const cells = [
+          { html: escapeHtml(l.address || ''), style: 'max-width:140px;overflow:hidden;text-overflow:ellipsis' },
+          { html: formatPrice(l.list_price), cls: 'price' },
+          { html: mv ? formatPrice(mv) : '-', cls: 'price' },
+          { html: formatDiff(l.diff_pct), style: 'text-align:right' },
+          { html: acres || '-', style: 'text-align:right;display:none', cls: 'col-xl' },
+          { html: sqft ? Number(sqft).toLocaleString() : '-', style: 'text-align:right;display:none', cls: 'col-xl' },
+          { html: '', style: 'font-size:0.72rem;max-width:100px;overflow:hidden;text-overflow:ellipsis', child: ownerLink },
+          { html: l.url ? '<a href="'+escapeHtml(l.url)+'" target="_blank" style="color:#60a5fa;text-decoration:none" onclick="event.stopPropagation()">\u2197</a>' : '' },
+          { html: badges.join(' ') },
+        ];
+        cells.forEach(c => {
+          const td = document.createElement('td');
+          if (c.html) td.innerHTML = c.html;
+          if (c.child) td.appendChild(c.child);
+          if (c.cls) td.className = c.cls;
+          if (c.style) td.style.cssText = c.style;
+          tr.appendChild(td);
+        });
+        frag.appendChild(tr);
       });
+      tbody.appendChild(frag);
       updateMap(listings);
     }
 
-    function filterTable() {
-      const q = document.getElementById('search').value.toLowerCase();
-      const dealFilter = document.getElementById('deal-filter').value;
-      filteredListings = allListings.filter(l => {
-        if (q && !(l.address || '').toLowerCase().includes(q) && !(l.city || '').toLowerCase().includes(q)) return false;
-        if (dealFilter === 'under') return l.diff_pct !== null && l.diff_pct < 0;
-        if (dealFilter === 'within15') return l.diff_pct !== null && Math.abs(l.diff_pct) <= DEAL_THRESHOLD;
-        if (dealFilter === 'over') return l.diff_pct !== null && l.diff_pct > DEAL_THRESHOLD;
-        if (dealFilter === 'no_tax') return l.diff_pct === null || l.diff_pct === undefined;
-        return true;
-      });
-      sortData();
-      renderTable(filteredListings);
+    let currentOwner = '';
+
+    function filterByOwner(name) {
+      currentOwner = name;
+      const badge = document.getElementById('owner-badge');
+      badge.textContent = '✕ Owner: ' + currentOwner;
+      badge.style.display = 'inline';
+      fetchData();
+    }
+
+    function clearOwnerFilter() {
+      currentOwner = '';
+      document.getElementById('owner-badge').style.display = 'none';
+      fetchData();
+    }
+
+    function getFilterParams() {
+      const p = new URLSearchParams();
+      p.set('limit', '500');
+      p.set('offset', '0');
+      const s = document.getElementById('filter-source').value;
+      if (s !== 'all') p.set('source', s);
+      const t = document.getElementById('filter-tier').value;
+      if (t !== 'all') p.set('tier', t);
+      const a = document.getElementById('filter-absentee').value;
+      if (a !== 'all') p.set('absentee', a);
+      const h = document.getElementById('filter-hasval').value;
+      if (h !== 'all') p.set('has_val', h);
+      const mn = document.getElementById('filter-pmin').value.trim();
+      if (mn) p.set('price_min', mn.replace(/[$,]/g, ''));
+      const mx = document.getElementById('filter-pmax').value.trim();
+      if (mx) p.set('price_max', mx.replace(/[$,]/g, ''));
+      const ct = document.getElementById('filter-city').value;
+      if (ct) p.set('city', ct);
+      const ac = document.getElementById('filter-acres').value.trim();
+      if (ac) p.set('min_acres', ac);
+      const sf = document.getElementById('filter-sqft').value.trim();
+      if (sf) p.set('min_sqft', sf);
+      const q = document.getElementById('search').value.trim();
+      if (q) p.set('q', q);
+      if (currentOwner) p.set('owner', currentOwner);
+      return p;
+    }
+
+    function getAcres(l) {
+      return l.prop_lot_sqft ? (l.prop_lot_sqft / 43560).toFixed(2) : (l.union_acres ? Number(l.union_acres).toFixed(2) : (l.york_acres ? Number(l.york_acres).toFixed(2) : (l.county_acres ? Number(l.county_acres).toFixed(2) : (l.lot_acres ? Number(l.lot_acres).toFixed(2) : null))));
+    }
+
+    function getSqft(l) {
+      return l.prop_sqft || l.union_sqft || l.york_sqft || l.sqft || null;
+    }
+
+    function debouncedFetch() {
+      clearTimeout(fetchTimer);
+      fetchTimer = setTimeout(fetchData, 300);
+    }
+
+    function deduplicate(listings) {
+      const map = new Map();
+      for (const l of listings) {
+        const key = l.property_id;
+        const existing = map.get(key);
+        if (!existing) { map.set(key, l); continue; }
+        const lHasDiff = l.diff_pct !== null && l.diff_pct !== undefined;
+        const eHasDiff = existing.diff_pct !== null && existing.diff_pct !== undefined;
+        if (lHasDiff && !eHasDiff) { map.set(key, l); }
+        else if (lHasDiff && eHasDiff && l.diff_pct < existing.diff_pct) { map.set(key, l); }
+        else if (!lHasDiff && !eHasDiff && l.list_price < existing.list_price) { map.set(key, l); }
+      }
+      return Array.from(map.values());
+    }
+
+    async function fetchData() {
+      const p = getFilterParams();
+      try {
+        const resp = await fetch('/api/listings?' + p.toString());
+        const data = await resp.json();
+        allListings = deduplicate(data.listings || []);
+        const rawTotal = data.total || 0;
+        const rawFiltered = data.filtered || 0;
+        const showing = allListings.length;
+        const statusParts = [];
+        if (rawTotal > showing) {
+          statusParts.push(`${showing} unique properties (${rawFiltered} listings match)`);
+        } else {
+          statusParts.push(`${showing} total`);
+        }
+        if (showing < rawFiltered) {
+          statusParts.push(`showing best price per property`);
+        }
+        document.getElementById('filter-count').textContent = '(' + statusParts.join(', ') + ')';
+        filteredListings = [...allListings];
+        sortData();
+        renderTable(filteredListings);
+      } catch (e) {
+        document.getElementById('listings-body').innerHTML = `<tr><td colspan="9" style="color:#f87171;text-align:center">Error loading data</td></tr>`;
+      }
     }
 
     function sortBy(field) {
@@ -226,6 +570,21 @@
       else { sortField = field; sortAsc = true; }
       sortData();
       renderTable(filteredListings);
+    }
+
+    function exportCSV() {
+      let csv = 'Address,Price,Market Value,Diff %,Acres,Sqft,Beds,Baths,Year Built,Owner,Absentee,Source,URL\n';
+      filteredListings.forEach(l => {
+        const acres = getAcres(l) || '';
+        const sqft = getSqft(l) || '';
+        const owner = (l.owner_name || l.county_owner || l.union_owner || l.york_owner || '').replace(/,/g, '');
+        csv += `"${l.address || ''}",${l.list_price || ''},${l.market_value || ''},${l.diff_pct || ''},${acres},${sqft},${l.prop_bedrooms || ''},${l.prop_bathrooms || ''},${l.prop_year_built || ''},"${owner}",${l.is_absentee ? 'YES' : 'NO'},${l.source || ''},${l.url || ''}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'deals.csv';
+      a.click();
     }
 
     function sortData() {
@@ -243,50 +602,196 @@
       if (lat && lng) map.setView([lat, lng], 16);
     }
 
-    function updateStats(stats) {
-      document.getElementById('stat-total').textContent = stats.total_listings;
-      document.getElementById('stat-avg').textContent = formatPrice(stats.avg_price);
-      document.getElementById('stat-range').textContent = `${formatPrice(stats.min_price)} - ${formatPrice(stats.max_price)}`;
-      document.getElementById('stat-taxed').textContent = stats.with_tax_data;
-      document.getElementById('stat-county').textContent = stats.with_county_data;
-      document.getElementById('stat-absentee').textContent = stats.county_absentee_owners;
-      document.getElementById('stat-assessed').textContent = stats.at_or_below_assessed;
-      document.getElementById('stat-deals').textContent = stats.deals_15pct;
-    }
-
-    async function loadData() {
+    async function fetchStats() {
       try {
-        const [listings, stats] = await Promise.all([
-          fetch('/api/listings').then(r => r.json()),
-          fetch('/api/stats').then(r => r.json())
-        ]);
-        allListings = listings;
-        updateStats(stats);
-        filteredListings = [...allListings];
-        sortBy('diff_pct');
+        const resp = await fetch('/api/stats');
+        const s = await resp.json();
+        document.getElementById('stat-total').textContent = (s.total_listings || 0).toLocaleString();
+        document.getElementById('stat-avg').textContent = s.avg_price ? '$' + Number(s.avg_price).toLocaleString() : '-';
+        document.getElementById('stat-taxed').textContent = (s.with_mkt_value || 0).toLocaleString();
+        document.getElementById('stat-absentee').textContent = (s.absentee_owners || 0).toLocaleString();
+        document.getElementById('stat-assessed').textContent = (s.undervalued || 0).toLocaleString();
+        document.getElementById('stat-deals').textContent = (s.premium || 0).toLocaleString();
+        document.getElementById('stat-overpriced').textContent = (s.overpriced || 0).toLocaleString();
       } catch (e) {
-        document.getElementById('listings-body').innerHTML = `<tr><td colspan="5" style="color:#f87171;text-align:center">Error loading data</td></tr>`;
+        console.error('Stats fetch failed', e);
       }
     }
 
-    async function enrichBatch() {
-      const btn = document.getElementById('enrich-btn');
-      btn.disabled = true;
-      btn.textContent = 'Enriching...';
-      try {
-        const resp = await fetch('/api/enrich-batch', { method: 'POST' });
-        const result = await resp.json();
-        btn.textContent = `Enriched ${result.enriched} properties`;
-        setTimeout(() => { btn.textContent = 'Enrich Tax'; btn.disabled = false; }, 2000);
-        loadData();
-      } catch (e) {
-        btn.textContent = 'Error';
-        btn.disabled = false;
+    function toggleCharts() {
+      showCharts = !showCharts;
+      const btn = document.getElementById('btn-charts');
+      const mainView = document.querySelector('.main');
+      const chartsView = document.getElementById('charts-view');
+      btn.textContent = showCharts ? 'Map' : 'Charts';
+      btn.style.background = showCharts ? '#475569' : '#8b5cf6';
+      mainView.style.display = showCharts ? 'none' : '';
+      chartsView.style.display = showCharts ? 'block' : 'none';
+      if (showCharts && chartInstances._loaded) {
+        Object.keys(chartInstances).forEach(k => {
+          if (k !== '_loaded' && chartInstances[k]) chartInstances[k].resize();
+        });
       }
+    }
+
+    async function loadCharts() {
+      try {
+        document.querySelectorAll('#charts-view canvas').forEach(c => {
+          const parent = c.parentElement;
+          if (c.offsetWidth === 0 && parent) {
+            c.style.width = (parent.clientWidth || 400) + 'px';
+            c.style.height = '240px';
+          }
+        });
+
+        const resp = await fetch('/api/charts');
+        const d = await resp.json();
+
+        const statsEl = document.getElementById('charts-stats');
+        const total = d.total_with_value || 0;
+        const pct = total ? Math.round(d.tiers.undervalued / total * 100) : 0;
+        statsEl.innerHTML = `
+          <div class="stat-box" style="background:#0f172a;padding:0.5rem 1rem;border-radius:6px;border:1px solid #334155;text-align:center;flex:1;min-width:80px">
+            <div class="num" style="color:#60a5fa">${total.toLocaleString()}</div><div class="lbl" style="font-size:0.65rem;color:#64748b;text-transform:uppercase">With Value</div>
+          </div>
+          <div class="stat-box" style="background:#0f172a;padding:0.5rem 1rem;border-radius:6px;border:1px solid #334155;text-align:center;flex:1;min-width:80px">
+            <div class="num" style="color:#4ade80">${d.tiers.undervalued}</div><div class="lbl" style="font-size:0.65rem;color:#64748b;text-transform:uppercase">Undervalued (${pct}%)</div>
+          </div>
+          <div class="stat-box" style="background:#0f172a;padding:0.5rem 1rem;border-radius:6px;border:1px solid #334155;text-align:center;flex:1;min-width:80px">
+            <div class="num" style="color:#fbbf24">${d.price_drops ? d.price_drops.length : 0}</div><div class="lbl" style="font-size:0.65rem;color:#64748b;text-transform:uppercase">Price Drops</div>
+          </div>
+          <div class="stat-box" style="background:#0f172a;padding:0.5rem 1rem;border-radius:6px;border:1px solid #334155;text-align:center;flex:1;min-width:80px">
+            <div class="num" style="color:#6ee7b7">${d.new_count || 0}</div><div class="lbl" style="font-size:0.65rem;color:#64748b;text-transform:uppercase">New (≤14d)</div>
+          </div>
+        `;
+
+        const dealsBody = document.getElementById('charts-deals-body');
+        dealsBody.innerHTML = (d.undervalued || []).map(u => `
+          <tr>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${u.url ? `<a href="${u.url}" target="_blank" style="color:#60a5fa">${escapeHtml(u.address)}</a>` : escapeHtml(u.address)}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${escapeHtml(u.city)}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right">$${u.list_price.toLocaleString()}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right">$${u.market_value.toLocaleString()}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right;color:#4ade80">${u.diff_pct}%</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${u.age_days || '?'}d</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${u.acres ? u.acres + 'a' : '-'}</td>
+          </tr>
+        `).join('') || '<tr><td colspan="7" style="text-align:center;color:#64748b;padding:1rem">No undervalued deals</td></tr>';
+
+        const dropsBody = document.getElementById('charts-drops-body');
+        dropsBody.innerHTML = (d.price_drops || []).map(p => {
+          const amt = p.old_price - p.new_price;
+          const pct2 = p.old_price ? Math.round(amt / p.old_price * 100) : 0;
+          return `<tr>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${p.url ? `<a href="${p.url}" target="_blank" style="color:#60a5fa">${escapeHtml(p.address)}</a>` : escapeHtml(p.address)}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${escapeHtml(p.city)}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right">$${p.old_price.toLocaleString()}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right">$${p.new_price.toLocaleString()}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right;color:#4ade80">-$${amt.toLocaleString()} (-${pct2}%)</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${p.detected_at || '-'}</td>
+          </tr>`;
+        }).join('') || '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:1rem">No price drops</td></tr>';
+
+        const ownersBody = document.getElementById('charts-owners-body');
+        ownersBody.innerHTML = (d.multi_owners || []).map(o => `
+          <tr>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-weight:600;color:#f1f5f9">${escapeHtml(o.owner)}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right;color:#fbbf24">${o.count}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-size:0.7rem;color:#94a3b8">${(o.addresses || []).slice(0,3).join(', ')}${o.addresses.length > 3 ? '...' : ''}</td>
+          </tr>
+        `).join('') || '<tr><td colspan="3" style="text-align:center;color:#64748b;padding:1rem">No multi-property owners</td></tr>';
+
+        const brokersBody = document.getElementById('charts-brokers-body');
+        brokersBody.innerHTML = (d.top_brokers || []).map(b => `<tr>
+          <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-weight:600;color:#f1f5f9">${escapeHtml(b.name)}</td>
+          <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right;color:#60a5fa">${b.count}</td>
+        </tr>`).join('') || '<tr><td colspan="2" style="text-align:center;color:#64748b;padding:1rem">No broker data</td></tr>';
+
+        makeChart('chart-tiers', 'doughnut',
+          ['Undervalued','At Value','Premium','Overpriced'],
+          [d.tiers.undervalued, d.tiers.at_value, d.tiers.premium, d.tiers.overpriced],
+          ['#4ade80','#60a5fa','#fbbf24','#f87171']);
+
+        makeChart('chart-age', 'doughnut',
+          ['New (≤14d)', 'Older'],
+          [d.new_count || 0, d.old_count || 0],
+          ['#6ee7b7', '#475569']);
+
+        const cities = d.cities || [];
+        makeChart('chart-cities', 'bar',
+          cities.map(c => c.city),
+          [cities.map(c => c.total), cities.map(c => c.undervalued), cities.map(c => c.absentee)],
+          { labels: ['Total', 'Undervalued', 'Absentee'], colors: ['#334155', '#4ade80', '#fbbf24'] });
+
+        chartInstances._loaded = true;
+      } catch(e) {
+        console.error('Charts load failed', e);
+      }
+    }
+
+    function makeChart(id, type, labels, data, color) {
+      if (chartInstances[id]) chartInstances[id].destroy();
+      const ctx = document.getElementById(id).getContext('2d');
+      const isPie = type === 'doughnut';
+      const isGrouped = type === 'bar' && Array.isArray(data[0]);
+
+      if (isGrouped) {
+        chartInstances[id] = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: color.labels.map((l, i) => ({
+              label: l,
+              data: data[i],
+              backgroundColor: color.colors[i],
+              borderRadius: 3
+            }))
+          },
+          options: {
+            responsive: true, maintainAspectRatio: true,
+            plugins: { legend: { position: 'top', labels: { color: '#94a3b8', boxWidth: 12, padding: 8, font: {size:10} } } },
+            scales: {
+              x: { ticks: { color: '#64748b', font: {size:10} }, grid: { display: false } },
+              y: { ticks: { color: '#64748b', font: {size:10} }, grid: { color: '#1e293b' }, beginAtZero: true }
+            }
+          }
+        });
+        return;
+      }
+
+      const horizontal = false;
+      chartInstances[id] = new Chart(ctx, {
+        type,
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: isPie ? color : Array.isArray(color) ? color : (labels.map(() => color)),
+            borderWidth: 0,
+            borderRadius: isPie ? 0 : 3
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          indexAxis: horizontal ? 'y' : undefined,
+          plugins: {
+            legend: isPie ? { position:'bottom', labels:{ color:'#94a3b8', padding:12 } } : { display: false }
+          },
+          scales: isPie ? {} : {
+            x: horizontal ? { ticks:{ color:'#64748b', font:{size:9} }, grid:{color:'#1e293b'} } : { ticks:{ color:'#64748b', font:{size:9}, maxRotation:45 }, grid:{display:false} },
+            y: horizontal ? { ticks:{ color:'#94a3b8', font:{size:9} }, grid:{display:false} } : { ticks:{ color:'#64748b', font:{size:10} }, grid:{color:'#1e293b'} }
+          }
+        }
+      });
     }
 
     initMap();
-    loadData();
+    fetchData();
+    fetchStats();
+    loadCharts().then(() => {
+      document.getElementById('charts-view').style.display = 'none';
+      chartInstances._loaded = true;
+    });
   </script>
 </body>
 </html>

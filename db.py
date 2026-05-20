@@ -65,16 +65,69 @@ def upsert_tax_record(property_id, tax_year, mkt_val_total=None, mkt_val_land=No
     conn.close()
 
 def upsert_listing(property_id, list_price, listing_status=None, listing_date=None,
-                    source=None, mls_id=None, rentcast_id=None, url=None):
+                    source=None, mls_id=None, rentcast_id=None, url=None,
+                    zestimate=None, broker_name=None, img_url=None, status_text=None):
     conn = get_conn()
+    existing = conn.execute(
+        "SELECT id, list_price FROM listings WHERE property_id=? AND source=?",
+        (property_id, source)
+    ).fetchone()
+    if existing and existing['list_price'] != list_price:
+        conn.execute(
+            """INSERT INTO price_history (listing_id, property_id, old_price, new_price, source, detected_at)
+               VALUES (?, ?, ?, ?, ?, datetime('now'))""",
+            (existing['id'], property_id, existing['list_price'], list_price, source)
+        )
     conn.execute(
-        """INSERT OR IGNORE INTO listings
-           (property_id, list_price, listing_status, listing_date, source, mls_id, rentcast_id, url)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (property_id, list_price, listing_status, listing_date, source, mls_id, rentcast_id, url)
+        """INSERT INTO listings (property_id, list_price, listing_status, listing_date,
+           source, mls_id, rentcast_id, url, zestimate, broker_name, img_url, status_text, last_seen_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(property_id, source) DO UPDATE SET
+               list_price=excluded.list_price,
+               listing_status=excluded.listing_status,
+               listing_date=excluded.listing_date,
+               url=excluded.url,
+               zestimate=excluded.zestimate,
+               broker_name=excluded.broker_name,
+               img_url=excluded.img_url,
+               status_text=excluded.status_text,
+               last_seen_at=datetime('now')""",
+        (property_id, list_price, listing_status, listing_date, source, mls_id, rentcast_id, url,
+         zestimate, broker_name, img_url, status_text)
     )
     conn.commit()
     conn.close()
+
+
+def set_property_details(property_id, bedrooms=None, bathrooms=None, sqft=None,
+                          year_built=None, lot_sqft=None, property_type=None):
+    if all(v is None for v in (bedrooms, bathrooms, sqft, year_built, lot_sqft, property_type)):
+        return
+    conn = get_conn()
+    conn.execute("""
+        INSERT INTO property_details (property_id, bedrooms, bathrooms, sqft,
+           year_built, lot_sqft, property_type, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(property_id) DO UPDATE SET
+            bedrooms = COALESCE(excluded.bedrooms, property_details.bedrooms),
+            bathrooms = COALESCE(excluded.bathrooms, property_details.bathrooms),
+            sqft = COALESCE(excluded.sqft, property_details.sqft),
+            year_built = COALESCE(excluded.year_built, property_details.year_built),
+            lot_sqft = COALESCE(excluded.lot_sqft, property_details.lot_sqft),
+            property_type = COALESCE(excluded.property_type, property_details.property_type),
+            updated_at = datetime('now')
+    """, (property_id, bedrooms, bathrooms, sqft, year_built, lot_sqft, property_type))
+    conn.commit()
+    conn.close()
+
+
+def get_property_details(property_id):
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM property_details WHERE property_id=?", (property_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 def find_deals(diff_pct=15):
     conn = get_conn()

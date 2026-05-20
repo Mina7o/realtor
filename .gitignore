@@ -7,3 +7,8 @@ openspec/
 county_parcels_full.db
 *.db-shm
 *.db-wal
+
+# Custom additions
+*.log
+output/
+.crawl4ai_profile/
