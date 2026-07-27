@@ -1,0 +1,140 @@
+services:
+  flask-app:
+    build: .
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./deals.db:/app/deals.db
+      - ./infrastructure.db:/app/infrastructure.db
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./output:/app/output
+    environment:
+      - PORT=5001
+      - MDB_CONNECTION_STRING=mongodb://host.docker.internal:27017
+      - ATTOM_API_KEY=${ATTOM_API_KEY:-}
+      - OTEL_SERVICE_NAME=realtor-flask
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_METRICS_EXPORTER=none
+      - OTEL_LOGS_EXPORTER=none
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - loki
+
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./logs:/logs
+      - ./docker/loki-config.yml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - ./logs:/logs
+      - ./docker/promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  tempo:
+    image: grafana/tempo:latest
+    user: "0"
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "3200:3200"
+    volumes:
+      - ./docker/tempo-config.yml:/etc/tempo/config.yml
+      - tempo-data:/tmp/tempo
+    command: -config.file=/etc/tempo/config.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana-datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./docker/grafana-dashboard.yml:/etc/grafana/provisioning/dashboards/dashboard.yml
+      - ./docker/scrape-health.json:/etc/grafana/provisioning/dashboards/scrape-health.json
+      - ./docker/grafana-contactpoints.yml:/etc/grafana/provisioning/alerting/contactpoints.yml
+      - ./docker/grafana-rules.yml:/etc/grafana/provisioning/alerting/rules.yml
+      - ./docker/grafana-notificationpolicies.yml:/etc/grafana/provisioning/alerting/notificationpolicies.yml
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+    depends_on:
+      - loki
+
+  temporal-postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - temporal-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  temporal:
+    image: temporalio/auto-setup:latest
+    ports:
+      - "7233:7233"
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PASSWORD=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=temporal-postgres
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+
+  temporal-web:
+    image: temporalio/web:latest
+    ports:
+      - "8233:8088"
+    environment:
+      - TEMPORAL_GRPC_ENDPOINT=temporal:7233
+    depends_on:
+      - temporal
+
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: realtor_sovereign
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  grafana-data:
+  tempo-data:
+  temporal-postgres-data:
+  mongodb-data:
+  prometheus-data:

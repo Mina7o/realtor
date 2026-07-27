@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infrastructure Alpha | Commercial Analytics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css" />
+</head>
+<body class="dashboard-body">
+<div class="page-shell">
+<section class="glass-hero">
+    <div class="hero-grid">
+        <div class="hero-stack">
+            <div class="hero-kicker">Commercial Portfolio Signal</div>
+            <h1 class="animate-title">Infrastructure Alpha</h1>
+            <p class="hero-subtitle">A glass analytics layer for county capacity, cost-to-power efficiency, inventory mix, and capital-weighted siting priority.</p>
+        </div>
+        <div class="hero-actions">
+            <div class="header-links">
+                <span class="nav-badge commercial">Commercial</span>
+                <a href="/commercial" class="nav-link">Sites</a>
+                <a href="/insights" class="nav-link">Insights</a>
+                <a href="/commercial_charts" class="nav-link active">Infrastructure Alpha</a>
+                <a id="health-link" class="health-link" href="http://localhost:3000/d/scrape-health/realtor-scrape-health?orgId=1" target="_blank">
+                    <span id="health-dot" class="health-dot"></span>
+                    <span class="health-label">Health</span>
+                    <div id="health-tooltip" class="health-tooltip" style="display:none"></div>
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="grid" id="loading-state">
+    <div class="col-12"><div class="loading">Loading strategic analytics...</div></div>
+</div>
+
+<div class="grid" id="dashboard-content" style="display:none">
+    <!-- Top stat bar -->
+    <div class="col-12">
+        <div class="stat-row" id="stat-pills"></div>
+    </div>
+
+    <!-- Capacity Distribution -->
+    <div class="card col-6">
+        <div class="card-title">Total MW Potential by County</div>
+        <div class="chart-container"><canvas id="capacityChart"></canvas></div>
+        <div class="timeline-legend">
+            <span class="legend-item"><div class="dot" style="background:var(--teal)"></div> A-Tier</span>
+            <span class="legend-item"><div class="dot" style="background:var(--accent-blue)"></div> B-Tier</span>
+            <span class="legend-item"><div class="dot" style="background:var(--accent-orange)"></div> C-Tier</span>
+            <span class="legend-item"><div class="dot" style="background:var(--accent-red)"></div> D-Tier</span>
+        </div>
+    </div>
+
+    <!-- Scatter: Site Acreage vs Substation Proximity -->
+    <div class="card col-6">
+        <div class="card-title">Cost-to-Power Efficiency</div>
+        <div class="chart-container"><canvas id="scatterChart"></canvas></div>
+        <div class="sub-stat" style="margin-top:8px;font-size:0.75rem">Circle size = total acres &nbsp;|&nbsp; Hover for details</div>
+    </div>
+
+    <!-- Tier Mix -->
+    <div class="card col-4">
+        <div class="card-title">Tier Mix — Inventory Breakdown</div>
+        <div class="chart-container"><canvas id="tierChart"></canvas></div>
+    </div>
+
+    <!-- County Rank Table -->
+    <div class="card col-8">
+        <div class="card-title">County Power Rankings</div>
+        <div style="max-height:300px;overflow-y:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:0.7rem;text-transform:uppercase">
+                        <th style="padding:6px 8px;text-align:left">County</th>
+                        <th style="padding:6px 8px;text-align:right">Sites</th>
+                        <th style="padding:6px 8px;text-align:right">Total Acres</th>
+                        <th style="padding:6px 8px;text-align:right">A-Tier</th>
+                        <th style="padding:6px 8px;text-align:right">Avg Score</th>
+                        <th style="padding:6px 8px;text-align:right">Dev Value</th>
+                    </tr>
+                </thead>
+                <tbody id="county-table-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</div>
+
+<script>
+async function loadAlpha() {
+    document.getElementById('loading-state').style.display = 'block';
+    const resp = await fetch('/api/commercial-stats');
+    const data = await resp.json();
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('dashboard-content').style.display = 'block';
+
+    const s = data.stats;
+    const aTierAc = data.a_tier_acres || 0;
+    const devVal = data.est_development_value || 0;
+    const powDen = data.power_density_score || 0;
+
+    // Stat pills
+    document.getElementById('stat-pills').innerHTML = `
+        <div class="stat-pill"><div class="num green">${s.total}</div><div class="lbl">Total Sites</div></div>
+        <div class="stat-pill"><div class="num">${Number(s.total_acres).toLocaleString()}</div><div class="lbl">Total Acres</div></div>
+        <div class="stat-pill highlight"><div class="num blue">$${(devVal / 1e6).toFixed(0)}M</div><div class="lbl">A-Tier Dev Value</div></div>
+        <div class="stat-pill"><div class="num orange">${powDen}</div><div class="lbl">Power Density</div></div>
+        <div class="stat-pill"><div class="num">${s.avg_score}</div><div class="lbl">Avg Score</div></div>
+        <div class="stat-pill"><div class="num">${s.avg_sub_dist}mi</div><div class="lbl">Avg Sub Dist</div></div>
+    `;
+
+    // --- Capacity Chart ---
+    const countyMap = {};
+    const tierColors = { A:'#00ba7c', B:'#1d9bf0', C:'#ffad1f', D:'#f4212e' };
+    const tierOrder = ['A','B','C','D'];
+    data.by_county.forEach(c => { countyMap[c.county] = { cnt:0, ac:0, tiers:{} }; });
+    data.by_tier.forEach(t => {
+        if (!countyMap[t.county]) countyMap[t.county] = { cnt:0, ac:0, tiers:{} };
+        countyMap[t.county].tiers[t.score_tier] = t.cnt;
+    });
+    data.by_county.forEach(c => {
+        if (!countyMap[c.county]) countyMap[c.county] = { cnt:0, ac:0, tiers:{} };
+        countyMap[c.county].cnt = c.cnt;
+        countyMap[c.county].ac = c.total_ac;
+    });
+
+    const sortedCounties = data.by_county.sort((a,b) => b.total_ac - a.total_ac);
+    const labels = sortedCounties.map(c => c.county);
+    const capacityDatasets = tierOrder.map(tier => ({
+        label: `Tier ${tier}`,
+        data: sortedCounties.map(c => countyMap[c.county].tiers[tier] || 0),
+        backgroundColor: tierColors[tier],
+        borderColor: 'transparent',
+        borderRadius: 2,
+    }));
+
+    new Chart(document.getElementById('capacityChart'), {
+        type: 'bar',
+        data: { labels, datasets: capacityDatasets },
+        options: {
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { stacked: true, grid: { color:'#2a2a2e' }, ticks: { color:'#88888b' } },
+                y: { stacked: true, grid: { color:'#2a2a2e' }, ticks: { color:'#88888b' } }
+            }
+        }
+    });
+
+    // --- Scatter: Acreage vs Substation ---
+    const scatterResp = await fetch('/api/commercial-sites?limit=500&sort=acres');
+    const scatterData = await scatterResp.json();
+    const scatterPoints = scatterData.sites.map(s => ({
+        x: Number(s.substation_distance_miles) || 10,
+        y: Number(s.acres),
+        r: Math.sqrt(Number(s.acres)) * 0.8,
+        tier: s.score_tier,
+        owner: s.owner_name,
+        county: s.county,
+        score: s.score_total
+    })).filter(p => p.x > 0 && p.y >= 10).slice(0, 300);
+
+    const scatterColors = { A:'#00ba7c', B:'#1d9bf0', C:'#ffad1f', D:'#f4212e' };
+    const scatterDatasets = tierOrder.map(tier => ({
+        label: `Tier ${tier}`,
+        data: scatterPoints.filter(p => p.tier === tier),
+        backgroundColor: scatterColors[tier],
+        borderColor: 'transparent',
+        pointRadius: 4,
+        pointHoverRadius: 8
+    }));
+
+    new Chart(document.getElementById('scatterChart'), {
+        type: 'scatter',
+        data: { datasets: scatterDatasets },
+        options: {
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position:'bottom', labels: { color:'#88888b', boxWidth:12, padding:12 } },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            const p = ctx.raw;
+                            return `${p.owner || '?'} | ${p.county} | ${p.y.toFixed(1)}ac | ${p.x.toFixed(1)}mi sub | ${p.score}pts`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display:true, text:'Substation Distance (mi)', color:'#88888b' },
+                    grid: { color:'#2a2a2e' }, ticks: { color:'#88888b' }, min: 0
+                },
+                y: {
+                    title: { display:true, text:'Site Acreage', color:'#88888b' },
+                    grid: { color:'#2a2a2e' }, ticks: { color:'#88888b' }, min: 0
+                }
+            }
+        }
+    });
+
+    // --- Tier Mix ---
+    new Chart(document.getElementById('tierChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['A-Tier','B-Tier','C-Tier','D-Tier'],
+            datasets: [{
+                data: [s.tier_a, s.tier_b, s.tier_c, s.tier_d],
+                backgroundColor: ['#00ba7c','#1d9bf0','#ffad1f','#f4212e'],
+                borderWidth: 0,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            maintainAspectRatio: false,
+            cutout: '60%',
+            plugins: {
+                legend: {
+                    position:'bottom',
+                    labels: { color:'#88888b', boxWidth:12, padding:12 }
+                }
+            }
+        }
+    });
+
+    // --- County Table ---
+    const tbody = document.getElementById('county-table-body');
+    sortedCounties.forEach(c => {
+        const tiers = countyMap[c.county].tiers || {};
+        const aCount = tiers.A || 0;
+        const countySites = data.by_county.find(d => d.county === c.county);
+        tbody.innerHTML += `
+            <tr style="border-bottom:1px solid #2a2a2e">
+                <td style="padding:6px 8px">${c.county}</td>
+                <td style="padding:6px 8px;text-align:right">${c.cnt}</td>
+                <td style="padding:6px 8px;text-align:right">${Number(c.total_ac).toLocaleString()}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--teal);font-weight:600">${aCount}</td>
+                <td style="padding:6px 8px;text-align:right">-</td>
+                <td style="padding:6px 8px;text-align:right;font-family:'JetBrains Mono',monospace">$${(aCount * 20).toFixed(0)}M</td>
+            </tr>
+        `;
+    });
+}
+
+async function fetchHealth() {
+  try {
+    const r = await fetch('/api/health');
+    const h = await r.json();
+    const dot = document.getElementById('health-dot');
+    const tip = document.getElementById('health-tooltip');
+    const link = document.getElementById('health-link');
+    const host = window.location.hostname;
+    link.href = `http://${host}:3000/d/scrape-health/realtor-scrape-health?orgId=1`;
+    let color, lines = [];
+    if (h.status === 'ok') { color = '#4ade80'; lines.push('<span style="color:#4ade80">\u25cf</span> <b>All systems OK</b>'); }
+    else if (h.status === 'warning') { color = '#fbbf24'; lines.push('<span style="color:#fbbf24">\u25cf</span> <b>Warning</b>'); if (h.stale) lines.push('  Stale \u2014 last run >48h ago'); if (h.errors) lines.push(`  ${h.errors} error(s)`); }
+    else { color = '#f87171'; lines.push('<span style="color:#f87171">\u25cf</span> <b>Error</b>'); lines.push('  ' + (h.message || 'Unknown')); }
+    dot.style.background = color;
+    lines.push(`<span style="color:#64748b">Job:</span> ${h.job || '?'}`);
+    lines.push(`<span style="color:#64748b">Ran:</span> ${h.finished_at ? new Date(h.finished_at).toLocaleString() : 'never'}`);
+    lines.push(`<span style="color:#64748b">Age:</span> ${h.age_hours ? h.age_hours.toFixed(1) : '?'}h`);
+    lines.push(`<span style="color:#64748b">Errors:</span> ${h.errors ?? '?'}`);
+    tip.innerHTML = lines.join('<br>');
+    dot.addEventListener('mouseenter', () => tip.style.display = 'block');
+    dot.addEventListener('mouseleave', () => tip.style.display = 'none');
+  } catch(e) { /* ignore */ }
+}
+
+loadAlpha();
+fetchHealth();
+</script>
+</body>
+</html>

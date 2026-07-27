@@ -1,0 +1,34 @@
+{
+  "Durham": {
+    "table": "raw_durham_nc_parcels",
+    "count": 2811
+  },
+  "Orange": {
+    "table": null,
+    "count": 0
+  },
+  "Johnston": {
+    "table": "raw_johnston_nc_parcels",
+    "count": 9843
+  },
+  "Chatham": {
+    "table": "raw_chatham_nc_parcels",
+    "count": 8387
+  },
+  "Guilford": {
+    "table": "raw_guilford_nc_parcels",
+    "count": 7629
+  },
+  "Forsyth": {
+    "table": "raw_forsyth_nc_parcels",
+    "count": 4245
+  },
+  "Rowan": {
+    "table": "raw_rowan_nc_parcels",
+    "count": 6278
+  },
+  "Iredell": {
+    "table": "raw_iredell_nc_parcels",
+    "count": 6855
+  }
+}

@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NC/SC Property Deals Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/static/app.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+</head>
+<body class="dashboard-body">
+  <div class="page-shell">
+    <section class="glass-hero">
+      <div class="hero-grid">
+        <div class="hero-stack">
+          <div class="hero-kicker">Residential Acquisition Console</div>
+          <h1 class="animate-title">NC/SC Property Deals Dashboard</h1>
+          <p class="hero-subtitle">Glass-mode command center for off-market style deal hunting, owner pattern scans, and map-first pricing intelligence across matched listing and tax data.</p>
+          <div class="hero-tags">
+            <span class="hero-chip">Live listing map</span>
+            <span class="hero-chip">ATTOM + county match</span>
+            <span class="hero-chip">Absentee owner filtering</span>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <div class="header-links">
+            <span class="nav-badge residential">Residential</span>
+            <a href="/" class="nav-link active">Home</a>
+            <a href="/charts" class="nav-link">Portfolio Alpha</a>
+            <a href="/commercial" class="nav-commercial">Commercial View</a>
+            <a href="/code-graph" target="_blank" class="nav-graph">Code Graph</a>
+            <a id="health-link" href="http://localhost:3000/d/scrape-health/realtor-scrape-health?orgId=1" target="_blank" class="health-link">
+              <span id="health-dot" class="health-dot"></span>
+              <span class="health-label">Health</span>
+              <div id="health-tooltip" class="health-tooltip"></div>
+            </a>
+          </div>
+          <div class="button-cluster">
+            <button id="toggle-mode" onclick="toggleMode()" class="btn btn-primary">Interactive</button>
+            <button id="toggle-charts" onclick="toggleCharts()" class="btn btn-charts">Charts</button>
+            <button id="btn-nearby" onclick="toggleProximityAlerts()" class="btn btn-warning">Nearby Radar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-bar" id="stats-bar">
+        <div class="stat-card"><div class="label">Total</div><div class="value blue animate-stat" id="stat-total">-</div></div>
+        <div class="stat-card"><div class="label">Avg Price</div><div class="value animate-stat" id="stat-avg">-</div></div>
+        <div class="stat-card"><div class="label">With Mkt Value</div><div class="value green animate-stat" id="stat-taxed">-</div></div>
+        <div class="stat-card"><div class="label">Absentee</div><div class="value amber animate-stat" id="stat-absentee">-</div></div>
+        <div class="stat-card"><div class="label">Undervalued</div><div class="value green animate-stat" id="stat-assessed">-</div></div>
+        <div class="stat-card"><div class="label">In Premium</div><div class="value amber animate-stat" id="stat-deals">-</div></div>
+        <div class="stat-card"><div class="label">Overpriced</div><div class="value red animate-stat" id="stat-overpriced">-</div></div>
+      </div>
+    </section>
+
+    <div id="health-modal">
+      <div class="health-modal-content">
+        <div class="health-modal-header">
+          <div class="flex gap-3 items-center">
+            <div class="modal-status-dot" style="width:12px;height:12px;background:#4ade80;border-radius:50%;box-shadow:0 0 10px #4ade80"></div>
+            <h2 style="font-size:0.9rem;color:#f1f5f9;text-transform:uppercase;letter-spacing:1px">Scrape Infrastructure Health</h2>
+          </div>
+          <div style="display:flex;gap:1rem;align-items:center">
+            <a id="grafana-link" href="#" target="_blank" style="color:#60a5fa;text-decoration:none;font-size:0.75rem;border:1px solid #60a5fa;padding:3px 8px;border-radius:4px">Open Full Grafana</a>
+            <button onclick="toggleHealthModal()" class="btn btn-ghost">&times;</button>
+          </div>
+        </div>
+        <iframe id="grafana-iframe" src="" style="flex:1;border:none;background:#111113"></iframe>
+      </div>
+    </div>
+  <div class="nearby-alert-box" id="nearby-box">
+    <div class="nearby-header">
+      <span>Proximity Alpha: Nearby Deals</span>
+      <span onclick="toggleProximityAlerts()" style="cursor:pointer;padding:0 5px">×</span>
+    </div>
+    <div class="nearby-list" id="nearby-list">
+      <div class="nearby-empty">Searching for undervalued deals nearby...</div>
+    </div>
+  </div>
+  <div class="main">
+    <div class="map-panel"><div id="map"></div></div>
+    <div class="table-panel">
+      <div class="toolbar" id="filter-bar">
+        <select id="filter-source" onchange="fetchData()">
+          <option value="all">All Sources</option>
+          <option value="zillow">Zillow</option>
+          <option value="fsbo">FSBO</option>
+          <option value="rentcast">RentCast</option>
+        </select>
+        <select id="filter-tier" onchange="fetchData()">
+          <option value="all">All Tiers</option>
+          <option value="undervalued">Undervalued</option>
+          <option value="at_value">At Value</option>
+          <option value="premium">Premium</option>
+          <option value="overpriced">Overpriced</option>
+        </select>
+        <select id="filter-absentee" onchange="fetchData()">
+          <option value="all">All Owners</option>
+          <option value="yes">Absentee</option>
+          <option value="no">Owner Occupied</option>
+        </select>
+        <select id="filter-hasval" onchange="fetchData()">
+          <option value="all">All</option>
+          <option value="yes">Has Mkt Val</option>
+          <option value="no">No Mkt Val</option>
+        </select>
+        <input type="text" id="filter-pmin" placeholder="Min $" style="width:65px" onchange="fetchData()">
+        <input type="text" id="filter-pmax" placeholder="Max $" style="width:65px" onchange="fetchData()">
+        <select id="filter-city" onchange="fetchData()" style="max-width:120px">
+          <option value="">All Cities</option>
+        </select>
+        <input type="text" id="filter-acres" placeholder="Min acres" style="width:70px" onchange="fetchData()">
+        <input type="text" id="filter-sqft" placeholder="Min sqft" style="width:65px" onchange="fetchData()">
+        <input type="text" id="search" placeholder="Search address..." style="flex:1;min-width:80px" oninput="debouncedFetch()">
+        <button onclick="exportCSV()" title="Export to CSV">CSV</button>
+        <span class="filter-count" id="filter-count"></span>
+        <span id="owner-badge" style="display:none;background:#1e3a5f;color:#93c5fd;padding:0.2rem 0.4rem;border-radius:4px;font-size:0.7rem;cursor:pointer" onclick="clearOwnerFilter()"></span>
+      </div>
+      <div style="overflow-y:auto;height:calc(100% - 44px)" id="table-container">
+        <table id="listings-table">
+          <thead>
+            <tr>
+              <th onclick="sortBy('address')">Address</th>
+              <th onclick="sortBy('list_price')">Price</th>
+              <th onclick="sortBy('market_value')">Mkt Value</th>
+              <th onclick="sortBy('diff_pct')">vs Mkt</th>
+              <th onclick="sortBy('acres')" class="col-xl">Acres</th>
+              <th onclick="sortBy('sqft_show')" class="col-xl">Sqft</th>
+              <th onclick="sortBy('owner_name')">Owner</th>
+              <th>Link</th>
+              <th>Flags</th>
+            </tr>
+          </thead>
+          <tbody id="listings-body">
+            <tr><td colspan="9" class="loading">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="detail-panel" id="detail-panel">
+      <div class="detail-header">
+        <h3 id="detail-title">Property Details</h3>
+        <button onclick="closeDetail()" class="btn btn-ghost">&times;</button>
+      </div>
+      <div id="detail-content"></div>
+    </div>
+  </div>
+
+  <div id="charts-view" style="padding:1rem">
+    <div class="charts-stats" id="charts-stats"></div>
+    <div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="card">
+        <h2 class="card-title">Deal Tiers</h2>
+        <canvas id="chart-tiers" style="max-height:240px"></canvas>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Listing Age</h2>
+        <canvas id="chart-age" style="max-height:240px"></canvas>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <h2 class="card-title">Deal Quality by City</h2>
+        <canvas id="chart-cities" style="max-height:260px"></canvas>
+      </div>
+      <div class="card" style="grid-column:1/-1;max-height:380px;overflow:auto">
+        <h2 class="card-title">Recent Price Drops <span style="font-weight:400;color:#fca5a5;text-transform:none">motivated sellers</span></h2>
+        <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+          <thead><tr>
+            <th>Address</th>
+            <th>City</th>
+            <th>Old Price</th>
+            <th>New Price</th>
+            <th>Drop</th>
+            <th>Date</th>
+          </tr></thead>
+          <tbody id="charts-drops-body"></tbody>
+        </table>
+      </div>
+      <div class="card" style="grid-column:1/-1;max-height:380px;overflow:auto">
+        <h2 class="card-title">Best Undervalued Deals</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+          <thead><tr>
+            <th>Address</th>
+            <th>City</th>
+            <th>List Price</th>
+            <th>Mkt Value</th>
+            <th>Discount</th>
+            <th>Age</th>
+            <th>Acres</th>
+          </tr></thead>
+          <tbody id="charts-deals-body"></tbody>
+        </table>
+      </div>
+      <div class="card" style="grid-column:1/-1;max-height:360px;overflow:auto">
+        <h2 class="card-title">Top Brokers by Inventory</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+          <thead><tr>
+            <th>Broker</th>
+            <th>Listings</th>
+          </tr></thead>
+          <tbody id="charts-brokers-body"></tbody>
+        </table>
+      </div>
+      <div class="card" style="grid-column:1/-1;max-height:360px;overflow:auto">
+        <h2 class="card-title">Property Owners (multi-property) <span style="font-weight:400;color:#93c5fd;text-transform:none">portfolio sellers</span></h2>
+        <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+          <thead><tr>
+            <th>Owner</th>
+            <th>Properties</th>
+            <th>Addresses</th>
+          </tr></thead>
+          <tbody id="charts-owners-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script>
+    const DEAL_THRESHOLD = 15;
+    let map, markersLayer, allListings = [], filteredListings = [];
+    let sortField = 'diff_pct', sortAsc = false;
+    let fetchTimer = null;
+    let showCharts = false;
+    let chartInstances = {};
+
+    let nearbyWatchId = null;
+    let isNearbyActive = false;
+
+    function toggleProximityAlerts() {
+      const box = document.getElementById('nearby-box');
+      const btn = document.getElementById('btn-nearby');
+
+      if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        alert('Geolocation requires a secure (HTTPS) connection. Please use localhost or set up SSL to use Nearby Deals.');
+        return;
+      }
+
+      isNearbyActive = !isNearbyActive;
+      
+      if (isNearbyActive) {
+        box.style.display = 'flex';
+        btn.classList.add('pulse-btn');
+        if (navigator.geolocation) {
+          nearbyWatchId = navigator.geolocation.watchPosition(
+            (pos) => updateNearbyDeals(pos.coords.latitude, pos.coords.longitude),
+            (err) => console.error('Geolocation error:', err),
+            { enableHighAccuracy: true }
+          );
+        } else {
+          alert('Geolocation not supported on this device.');
+          toggleProximityAlerts();
+        }
+      } else {
+        box.style.display = 'none';
+        btn.classList.remove('pulse-btn');
+        if (nearbyWatchId) navigator.geolocation.clearWatch(nearbyWatchId);
+        nearbyWatchId = null;
+      }
+    }
+
+    function promptNavigation(l) {
+      // 1. Internal Action: Zoom dashboard map and show details
+      // Using existing flyTo for smooth, centered movement
+      flyTo(l.lat, l.lng);
+      
+      // Ensure the marker for this specific nearby deal is on the map
+      // (The nearby-deals API might return items not currently in the main filtered list)
+      updateMap([l], true); // true = append mode
+      
+      showDetail(l);
+      
+      // 2. External Action: Prompt for driving directions
+      setTimeout(() => {
+        if (confirm(`Start driving route to ${l.address}?`)) {
+          window.open(`https://www.google.com/maps/dir/?api=1&destination=${l.lat},${l.lng}`, '_blank');
+        }
+      }, 500);
+    }
+
+    async function updateNearbyDeals(lat, lng) {
+      const list = document.getElementById('nearby-list');
+      try {
+        const r = await fetch(`/api/nearby-deals?lat=${lat}&lng=${lng}&radius=2.0`);
+        const data = await r.json();
+        
+        if (!data.deals || data.deals.length === 0) {
+          list.innerHTML = '<div class="nearby-empty">No undervalued deals within 2 miles of your location.</div>';
+          return;
+        }
+
+        list.innerHTML = data.deals.map(d => `
+          <div class="nearby-item" onclick="promptNavigation(${JSON.stringify(d).replace(/"/g, '&quot;')})" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+            <div style="flex:1;">
+              <div class="addr">${d.address}</div>
+              <div class="discount">${Math.abs(d.diff_pct).toFixed(1)}% BELOW MARKET</div>
+              <div class="meta">$${(d.list_price/1000).toFixed(0)}k | ${d.score_tier} Tier</div>
+            </div>
+               <div style="background:#1a73e8; color:#fff; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(26,115,232,0.4); font-size:0.65rem; font-weight:700; letter-spacing:0.08em;">
+                GO
+               </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('Nearby fetch error:', e);
+      }
+    }
+
+    function initMap() {
+      map = L.map('map', { zoomControl: true }).setView([35.2271, -80.8431], 12);
+      
+      const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap',
+        maxZoom: 19
+      }).addTo(map);
+
+      const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EBP, and the GIS User Community',
+        maxZoom: 19
+      });
+
+      L.control.layers({
+        "Streets": streets,
+        "Satellite": satellite
+      }, null, { position: 'topright' }).addTo(map);
+      markersLayer = L.layerGroup().addTo(map);
+    }
+
+    function getColor(diff) {
+      if (diff === null || diff === undefined) return '#94a3b8';
+      if (diff < -15) return '#fbbf24';
+      if (diff < 0) return '#4ade80';
+      if (diff <= 15) return '#60a5fa';
+      return '#f87171';
+    }
+
+    function formatPrice(v) {
+      if (!v) return '-';
+      return '$' + Number(v).toLocaleString();
+    }
+
+    function formatDiff(d) {
+      if (d === null || d === undefined) return '<span class="no-deal">N/A</span>';
+      const cls = Math.abs(d) <= DEAL_THRESHOLD ? 'deal-badge' : 'no-deal';
+      const sign = d > 0 ? '+' : '';
+      return `<span class="${cls}">${sign}${d.toFixed(1)}%</span>`;
+    }
+
+    function escapeHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function sourceBadge(src) {
+      const labels = { tax: 'tax', county: 'cnt', attom: 'avm', zest: 'zest' };
+      const cls = labels[src] || '';
+      if (!cls) return '';
+      return `<span class="badge ${cls}">${labels[src]}</span>`;
+    }
+
+    function updateMap(listings, append = false) {
+      if (!append) markersLayer.clearLayers();
+      listings.forEach(l => {
+        if (!l.lat || !l.lng) return;
+        const color = getColor(l.diff_pct);
+        const marker = L.circleMarker([l.lat, l.lng], {
+          radius: 7, fillColor: color, color: '#fff',
+          weight: 1, opacity: 1, fillOpacity: 0.8
+        });
+        const mv = l.market_value;
+        const mvStr = mv ? formatPrice(mv) : 'N/A';
+        const diffStr = l.diff_pct !== null ? `${l.diff_pct > 0 ? '+' : ''}${l.diff_pct.toFixed(1)}%` : 'N/A';
+        const absentee = l.is_absentee ? '<span class="badge absentee">ABSENTEE</span>' : '';
+        const owner = l.owner_name || l.county_owner || l.union_owner || l.york_owner || 'N/A';
+        const avmStr = l.avm_value ? formatPrice(l.avm_value) : 'N/A';
+        const assessedStr = l.union_fmv ? formatPrice(l.union_fmv) : (l.york_fmv ? formatPrice(l.york_fmv) : (l.county_assessed_value ? formatPrice(l.county_assessed_value) : (l.assessed_value ? formatPrice(l.assessed_value) : 'N/A')));
+        const zestStr = l.zestimate ? formatPrice(l.zestimate) : 'N/A';
+        const srcBadge = sourceBadge(l.value_source);
+        marker.bindPopup(`
+          <div class="popup-content">
+            <h3>${escapeHtml(l.address || '')}</h3>
+            <div class="row"><span>List Price</span><strong>${formatPrice(l.list_price)}</strong></div>
+            <div class="row"><span>Market Value ${srcBadge}</span><strong>${mvStr}</strong></div>
+            <div class="row"><span>Diff</span><span>${diffStr}</span></div>
+            <hr style="border-color:#334155;margin:4px 0">
+            <div class="row"><span>Zestimate</span><span>${zestStr}</span></div>
+            <div class="row"><span>ATTOM AVM</span><span>${avmStr}</span></div>
+            <div class="row"><span>County Assessed</span><span>${assessedStr}</span></div>
+            ${l.union_fmv_land || l.york_fmv_land || l.county_land_value ?`<div class="row"><span>Land/Build</span><span>${formatPrice(l.union_fmv_land||l.york_fmv_land||l.county_land_value)} / ${formatPrice(l.union_fmv_building||l.york_fmv_building||l.county_building_value)}</span></div>`:''}
+            <div class="row"><span>Last Sale</span><span>${l.union_last_sale_price ? formatPrice(l.union_last_sale_price)+' ('+(l.union_last_sale_date||'?')+')' : (l.york_last_sale_price ? formatPrice(l.york_last_sale_price)+' ('+(l.york_last_sale_date||'?')+')' : (l.county_last_sale_price ? formatPrice(l.county_last_sale_price)+' ('+(l.county_last_sale_date||'?')+')' : 'N/A'))}</span></div>
+            <div class="row"><span>Owner</span><span>${escapeHtml(owner)} ${absentee}</span></div>
+            ${l.union_mail_city ? `<div class="row"><span>Mailing</span><span>${escapeHtml(l.union_mail_city||'')} ${l.union_mail_state||''} ${l.union_mail_zip||''}</span></div>` : (l.york_mail_city ? `<div class="row"><span>Mailing</span><span>${escapeHtml(l.york_mail_city||'')} ${l.york_mail_state||''} ${l.york_mail_zip||''}</span></div>` : (l.county_mail_city ? `<div class="row"><span>Mailing</span><span>${escapeHtml(l.county_mail_addr||'')}, ${escapeHtml(l.county_mail_city)} ${l.county_mail_state||''} ${l.county_mail_zip||''}</span></div>` : ''))}
+            ${l.url ? `<div class="row"><a href="${l.url}" target="_blank">View Listing →</a></div>` : ''}
+          </div>
+        `);
+        markersLayer.addLayer(marker);
+      });
+    }
+
+    let interactiveMode = false;
+
+    function toggleHealthModal() {
+      const modal = document.getElementById('health-modal');
+      const iframe = document.getElementById('grafana-iframe');
+      const link = document.getElementById('grafana-link');
+      
+      if (!modal.classList.contains('active')) {
+        const host = window.location.hostname;
+        const grafanaUrl = `http://${host}:3000/d/scrape-health/realtor-scrape-health?orgId=1&refresh=30s&kiosk`;
+        iframe.src = grafanaUrl;
+        link.href = `http://${host}:3000/d/scrape-health/realtor-scrape-health?orgId=1`;
+        modal.classList.add('active');
+      } else {
+        modal.classList.remove('active');
+        iframe.src = ''; 
+      }
+    }
+
+    function toggleMode() {
+      interactiveMode = !interactiveMode;
+      const btn = document.getElementById('toggle-mode');
+      btn.textContent = interactiveMode ? 'Map View' : 'Interactive';
+      btn.style.background = interactiveMode ? '#475569' : '#3b82f6';
+      document.querySelector('.map-panel').classList.toggle('shrink', interactiveMode);
+      document.querySelector('.table-panel').classList.toggle('wide', interactiveMode);
+      document.querySelectorAll('.col-xl').forEach(el => el.style.display = interactiveMode ? '' : 'none');
+      if (!interactiveMode) closeDetail();
+      renderTable(filteredListings);
+    }
+
+    function showDetail(l) {
+      if (!interactiveMode) {
+        flyTo(l.lat, l.lng);
+        return;
+      }
+      const panel = document.getElementById('detail-panel');
+      const content = document.getElementById('detail-content');
+      panel.classList.add('open');
+      const owner = l.owner_name || l.county_owner || l.union_owner || l.york_owner || 'N/A';
+      const acres = getAcres(l);
+      const sqft = getSqft(l);
+      const absentee = l.is_absentee ? 'YES' : 'NO';
+      const img = l.img_url ? `<img class="detail-img" src="${l.img_url}" alt="Property">` : '';
+      content.innerHTML = `
+        ${img}
+        <h3 style="margin-bottom:0.5rem">${escapeHtml(l.address || '')}</h3>
+        <div class="row"><span class="label">List Price</span><span class="val">${formatPrice(l.list_price)}</span></div>
+        <div class="row"><span class="label">Market Value</span><span class="val">${l.market_value ? formatPrice(l.market_value) : 'N/A'} ${sourceBadge(l.value_source)}</span></div>
+        <div class="row"><span class="label">Diff</span><span class="val">${l.diff_pct !== null ? (l.diff_pct > 0 ? '+' : '') + l.diff_pct.toFixed(1) + '%' : 'N/A'}</span></div>
+        <div class="row"><span class="label">Source</span><span class="val">${l.source || 'N/A'}</span></div>
+        ${acres ? `<div class="row"><span class="label">Acres</span><span class="val">${acres}</span></div>` : ''}
+        ${sqft ? `<div class="row"><span class="label">Sqft</span><span class="val">${Number(sqft).toLocaleString()}</span></div>` : ''}
+        ${l.prop_bedrooms ? `<div class="row"><span class="label">Beds / Baths</span><span class="val">${l.prop_bedrooms} / ${l.prop_bathrooms || '?'}</span></div>` : ''}
+        ${l.prop_year_built ? `<div class="row"><span class="label">Year Built</span><span class="val">${l.prop_year_built}</span></div>` : ''}
+        ${l.prop_type ? `<div class="row"><span class="label">Type</span><span class="val">${l.prop_type}</span></div>` : ''}
+        ${l.broker_name ? `<div class="row"><span class="label">Broker</span><span class="val">${escapeHtml(l.broker_name)}</span></div>` : ''}
+        <div class="row"><span class="label">Owner</span><span class="val">${escapeHtml(owner)}</span></div>
+        <div class="row"><span class="label">Absentee</span><span class="val">${absentee}</span></div>
+        ${l.union_fmv ? `<div class="row"><span class="label">Union FMV</span><span class="val">${formatPrice(l.union_fmv)} ${l.union_fmv_land ? '(L:'+formatPrice(l.union_fmv_land)+' B:'+formatPrice(l.union_fmv_building)+')' : ''}</span></div>` : ''}
+        ${l.union_last_sale_price ? `<div class="row"><span class="label">Union Lst Sale</span><span class="val">${formatPrice(l.union_last_sale_price)} (${l.union_last_sale_date || '?'}) ${l.union_deed_type ? '['+l.union_deed_type+']' : ''}</span></div>` : ''}
+        ${l.york_fmv ? `<div class="row"><span class="label">York FMV</span><span class="val">${formatPrice(l.york_fmv)} ${l.york_fmv_land ? '(L:'+formatPrice(l.york_fmv_land)+' B:'+formatPrice(l.york_fmv_building)+')' : ''}</span></div>` : ''}
+        ${l.york_last_sale_price ? `<div class="row"><span class="label">York Lst Sale</span><span class="val">${formatPrice(l.york_last_sale_price)} (${l.york_last_sale_date || '?'})</span></div>` : ''}
+        ${l.last_sale_price ? `<div class="row"><span class="label">Last Sale</span><span class="val">${formatPrice(l.last_sale_price)} (${l.last_sale_date || '?'})</span></div>` : ''}
+        ${l.county_property_use ? `<div class="row"><span class="label">Land Use</span><span class="val">${l.county_property_use}</span></div>` : ''}
+        ${l.url ? `<div style="margin-top:0.75rem; display:flex; gap:10px;">
+          <a href="${l.url}" target="_blank" style="color:#60a5fa; text-decoration:none; border:1px solid #60a5fa; padding:5px 10px; border-radius:4px; font-size:0.75rem;">View Listing →</a>
+          <a href="https://www.google.com/maps/dir/?api=1&destination=${l.lat},${l.lng}" target="_blank" style="color:#fff; background:#1a73e8; text-decoration:none; padding:5px 10px; border-radius:4px; font-size:0.75rem; font-weight:600;">Open Route</a>
+        </div>` : ''}
+        <div id="price-history" style="margin-top:0.75rem"><span style="color:#64748b;font-size:0.7rem">Loading price history...</span></div>
+      `;
+
+      fetch('/api/price-history/' + l.listing_id)
+        .then(r => r.json())
+        .then(history => {
+          const el = document.getElementById('price-history');
+          if (!history || history.length === 0) {
+            el.innerHTML = '';
+            return;
+          }
+          let html = `<h4 style="color:#fbbf24;margin:0.75rem 0 0.4rem 0;font-size:0.85rem">PRICE HISTORY (${history.length} drops)</h4>`;
+          history.forEach(h => {
+            const drop = h.old_price - h.new_price;
+            const pct = h.old_price ? (drop / h.old_price * 100) : 0;
+            html += `<div style="font-size:0.75rem;padding:0.3rem 0;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between">
+              <span><span style="color:#fca5a5">↓</span> <span style="color:#94a3b8">${h.detected_at}</span></span>
+              <span style="color:#f1f5f9">$${h.old_price.toLocaleString()} → $${h.new_price.toLocaleString()}</span>
+              <span style="color:#fca5a5">-$${drop.toLocaleString()} (${pct.toFixed(0)}%)</span>
+            </div>`;
+          });
+          el.innerHTML = html;
+        });
+    }
+
+    function closeDetail() {
+      document.getElementById('detail-panel').classList.remove('open');
+    }
+
+    function renderTable(listings) {
+      const tbody = document.getElementById('listings-body');
+      tbody.innerHTML = '';
+      if (!listings.length) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:2rem">No listings match filters</td></tr>';
+        updateMap(listings);
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      listings.forEach((l, i) => {
+        const tr = document.createElement('tr');
+        const rowClass = l.diff_pct !== null && l.diff_pct < 0 ? 'under' : (l.diff_pct !== null && l.diff_pct > 20 ? 'over' : '');
+        if (rowClass) tr.className = rowClass;
+        tr.dataset.idx = i;
+        tr.addEventListener('click', () => showDetail(l));
+
+        const owner = l.owner_name || l.county_owner || l.union_owner || l.york_owner || '';
+        const mv = l.market_value;
+        const badges = [];
+        if (l.is_absentee) badges.push('<span class="badge absentee">ABS</span>');
+        if (l.is_new) badges.push('<span class="badge new">NEW</span>');
+        if (l.price_drop) badges.push('<span class="badge drop">↓$</span>');
+        const acres = getAcres(l);
+        if (acres && parseFloat(acres) >= 2) badges.push(`<span class="badge acres">${acres}a</span>`);
+        const sqft = getSqft(l);
+
+        const ownerLink = document.createElement('a');
+        ownerLink.href = '#';
+        ownerLink.style.cssText = 'color:#93c5fd;text-decoration:none';
+        ownerLink.textContent = owner.slice(0, 18);
+        ownerLink.addEventListener('click', (e) => {
+          e.stopPropagation();
+          filterByOwner(owner);
+        });
+
+        const cells = [
+          { html: escapeHtml(l.address || ''), style: 'max-width:140px;overflow:hidden;text-overflow:ellipsis' },
+          { html: formatPrice(l.list_price), cls: 'price' },
+          { html: mv ? formatPrice(mv) : '-', cls: 'price' },
+          { html: formatDiff(l.diff_pct), style: 'text-align:right' },
+          { html: acres || '-', style: 'text-align:right;display:none', cls: 'col-xl' },
+          { html: sqft ? Number(sqft).toLocaleString() : '-', style: 'text-align:right;display:none', cls: 'col-xl' },
+          { html: '', style: 'font-size:0.72rem;max-width:100px;overflow:hidden;text-overflow:ellipsis', child: ownerLink },
+          { html: l.url ? '<a href="'+escapeHtml(l.url)+'" target="_blank" style="color:#60a5fa;text-decoration:none" onclick="event.stopPropagation()">\u2197</a>' : '' },
+          { html: badges.join(' ') },
+        ];
+        cells.forEach(c => {
+          const td = document.createElement('td');
+          if (c.html) td.innerHTML = c.html;
+          if (c.child) td.appendChild(c.child);
+          if (c.cls) td.className = c.cls;
+          if (c.style) td.style.cssText = c.style;
+          tr.appendChild(td);
+        });
+        frag.appendChild(tr);
+      });
+      tbody.appendChild(frag);
+      updateMap(listings);
+    }
+
+    let currentOwner = '';
+
+    function filterByOwner(name) {
+      currentOwner = name;
+      const badge = document.getElementById('owner-badge');
+      badge.textContent = 'Clear owner: ' + currentOwner;
+      badge.style.display = 'inline';
+      fetchData();
+    }
+
+    function clearOwnerFilter() {
+      currentOwner = '';
+      document.getElementById('owner-badge').style.display = 'none';
+      fetchData();
+    }
+
+    function getFilterParams() {
+      const p = new URLSearchParams();
+      p.set('limit', '500');
+      p.set('offset', '0');
+      const s = document.getElementById('filter-source').value;
+      if (s !== 'all') p.set('source', s);
+      const t = document.getElementById('filter-tier').value;
+      if (t !== 'all') p.set('tier', t);
+      const a = document.getElementById('filter-absentee').value;
+      if (a !== 'all') p.set('absentee', a);
+      const h = document.getElementById('filter-hasval').value;
+      if (h !== 'all') p.set('has_val', h);
+      const mn = document.getElementById('filter-pmin').value.trim();
+      if (mn) p.set('price_min', mn.replace(/[$,]/g, ''));
+      const mx = document.getElementById('filter-pmax').value.trim();
+      if (mx) p.set('price_max', mx.replace(/[$,]/g, ''));
+      const ct = document.getElementById('filter-city').value;
+      if (ct) p.set('city', ct);
+      const ac = document.getElementById('filter-acres').value.trim();
+      if (ac) p.set('min_acres', ac);
+      const sf = document.getElementById('filter-sqft').value.trim();
+      if (sf) p.set('min_sqft', sf);
+      const q = document.getElementById('search').value.trim();
+      if (q) p.set('q', q);
+      if (currentOwner) p.set('owner', currentOwner);
+      return p;
+    }
+
+    function getAcres(l) {
+      return l.prop_lot_sqft ? (l.prop_lot_sqft / 43560).toFixed(2) : (l.union_acres ? Number(l.union_acres).toFixed(2) : (l.york_acres ? Number(l.york_acres).toFixed(2) : (l.county_acres ? Number(l.county_acres).toFixed(2) : (l.lot_acres ? Number(l.lot_acres).toFixed(2) : null))));
+    }
+
+    function getSqft(l) {
+      return l.prop_sqft || l.union_sqft || l.york_sqft || l.sqft || null;
+    }
+
+    function debouncedFetch() {
+      clearTimeout(fetchTimer);
+      fetchTimer = setTimeout(fetchData, 300);
+    }
+
+    function deduplicate(listings) {
+      const map = new Map();
+      for (const l of listings) {
+        const key = l.property_id;
+        const existing = map.get(key);
+        if (!existing) { map.set(key, l); continue; }
+        const lHasDiff = l.diff_pct !== null && l.diff_pct !== undefined;
+        const eHasDiff = existing.diff_pct !== null && existing.diff_pct !== undefined;
+        if (lHasDiff && !eHasDiff) { map.set(key, l); }
+        else if (lHasDiff && eHasDiff && l.diff_pct < existing.diff_pct) { map.set(key, l); }
+        else if (!lHasDiff && !eHasDiff && l.list_price < existing.list_price) { map.set(key, l); }
+      }
+      return Array.from(map.values());
+    }
+
+    async function fetchData() {
+      const p = getFilterParams();
+      try {
+        const resp = await fetch('/api/listings?' + p.toString());
+        const data = await resp.json();
+        allListings = deduplicate(data.listings || []);
+        const rawTotal = data.total || 0;
+        const rawFiltered = data.filtered || 0;
+        const showing = allListings.length;
+        const statusParts = [];
+        if (rawTotal > showing) {
+          statusParts.push(`${showing} unique properties (${rawFiltered} listings match)`);
+        } else {
+          statusParts.push(`${showing} total`);
+        }
+        if (showing < rawFiltered) {
+          statusParts.push(`showing best price per property`);
+        }
+        document.getElementById('filter-count').textContent = '(' + statusParts.join(', ') + ')';
+        filteredListings = [...allListings];
+        sortData();
+        renderTable(filteredListings);
+      } catch (e) {
+        document.getElementById('listings-body').innerHTML = `<tr><td colspan="9" style="color:#f87171;text-align:center">Error loading data</td></tr>`;
+      }
+    }
+
+    function sortBy(field) {
+      if (sortField === field) sortAsc = !sortAsc;
+      else { sortField = field; sortAsc = true; }
+      sortData();
+      renderTable(filteredListings);
+    }
+
+    function exportCSV() {
+      let csv = 'Address,Price,Market Value,Diff %,Acres,Sqft,Beds,Baths,Year Built,Owner,Absentee,Source,URL\n';
+      filteredListings.forEach(l => {
+        const acres = getAcres(l) || '';
+        const sqft = getSqft(l) || '';
+        const owner = (l.owner_name || l.county_owner || l.union_owner || l.york_owner || '').replace(/,/g, '');
+        csv += `"${l.address || ''}",${l.list_price || ''},${l.market_value || ''},${l.diff_pct || ''},${acres},${sqft},${l.prop_bedrooms || ''},${l.prop_bathrooms || ''},${l.prop_year_built || ''},"${owner}",${l.is_absentee ? 'YES' : 'NO'},${l.source || ''},${l.url || ''}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'deals.csv';
+      a.click();
+    }
+
+    function sortData() {
+      filteredListings.sort((a, b) => {
+        let va = a[sortField], vb = b[sortField];
+        if (typeof va === 'string') va = va.toLowerCase();
+        if (typeof vb === 'string') vb = vb.toLowerCase();
+        if (va === null || va === undefined) va = sortAsc ? Infinity : -Infinity;
+        if (vb === null || vb === undefined) vb = sortAsc ? Infinity : -Infinity;
+        return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+      });
+    }
+
+    function flyTo(lat, lng) {
+      if (lat && lng) map.setView([lat, lng], 16);
+    }
+
+    async function fetchStats() {
+      try {
+        const resp = await fetch('/api/stats');
+        const s = await resp.json();
+        document.getElementById('stat-total').textContent = (s.total_listings || 0).toLocaleString();
+        document.getElementById('stat-avg').textContent = s.avg_price ? '$' + Number(s.avg_price).toLocaleString() : '-';
+        document.getElementById('stat-taxed').textContent = (s.with_mkt_value || 0).toLocaleString();
+        document.getElementById('stat-absentee').textContent = (s.absentee_owners || 0).toLocaleString();
+        document.getElementById('stat-assessed').textContent = (s.undervalued || 0).toLocaleString();
+        document.getElementById('stat-deals').textContent = (s.premium || 0).toLocaleString();
+        document.getElementById('stat-overpriced').textContent = (s.overpriced || 0).toLocaleString();
+      } catch (e) {
+        console.error('Stats fetch failed', e);
+      }
+    }
+
+    function toggleCharts() {
+      showCharts = !showCharts;
+      const btn = document.getElementById('btn-charts');
+      const mainView = document.querySelector('.main');
+      const chartsView = document.getElementById('charts-view');
+      btn.textContent = showCharts ? 'Map' : 'Charts';
+      btn.style.background = showCharts ? '#475569' : '#8b5cf6';
+      mainView.style.display = showCharts ? 'none' : '';
+      chartsView.style.display = showCharts ? 'block' : 'none';
+      if (showCharts && chartInstances._loaded) {
+        Object.keys(chartInstances).forEach(k => {
+          if (k !== '_loaded' && chartInstances[k]) chartInstances[k].resize();
+        });
+      }
+    }
+
+    async function loadCharts() {
+      try {
+        document.querySelectorAll('#charts-view canvas').forEach(c => {
+          const parent = c.parentElement;
+          if (c.offsetWidth === 0 && parent) {
+            c.style.width = (parent.clientWidth || 400) + 'px';
+            c.style.height = '240px';
+          }
+        });
+
+        const resp = await fetch('/api/charts');
+        const d = await resp.json();
+
+        const statsEl = document.getElementById('charts-stats');
+        const total = d.total_with_value || 0;
+        const pct = total ? Math.round(d.tiers.undervalued / total * 100) : 0;
+        statsEl.innerHTML = `
+          <div class="stat-box" style="background:#0f172a;padding:0.5rem 1rem;border-radius:6px;border:1px solid #334155;text-align:center;flex:1;min-width:80px">
+            <div class="num" style="color:#60a5fa">${total.toLocaleString()}</div><div class="lbl" style="font-size:0.65rem;color:#64748b;text-transform:uppercase">With Value</div>
+          </div>
+          <div class="stat-box" style="background:#0f172a;padding:0.5rem 1rem;border-radius:6px;border:1px solid #334155;text-align:center;flex:1;min-width:80px">
+            <div class="num" style="color:#4ade80">${d.tiers.undervalued}</div><div class="lbl" style="font-size:0.65rem;color:#64748b;text-transform:uppercase">Undervalued (${pct}%)</div>
+          </div>
+          <div class="stat-box" style="background:#0f172a;padding:0.5rem 1rem;border-radius:6px;border:1px solid #334155;text-align:center;flex:1;min-width:80px">
+            <div class="num" style="color:#fbbf24">${d.price_drops ? d.price_drops.length : 0}</div><div class="lbl" style="font-size:0.65rem;color:#64748b;text-transform:uppercase">Price Drops</div>
+          </div>
+          <div class="stat-box" style="background:#0f172a;padding:0.5rem 1rem;border-radius:6px;border:1px solid #334155;text-align:center;flex:1;min-width:80px">
+            <div class="num" style="color:#6ee7b7">${d.new_count || 0}</div><div class="lbl" style="font-size:0.65rem;color:#64748b;text-transform:uppercase">New (≤14d)</div>
+          </div>
+        `;
+
+        const dealsBody = document.getElementById('charts-deals-body');
+        dealsBody.innerHTML = (d.undervalued || []).map(u => `
+          <tr>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${u.url ? `<a href="${u.url}" target="_blank" style="color:#60a5fa">${escapeHtml(u.address)}</a>` : escapeHtml(u.address)}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${escapeHtml(u.city)}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right">$${u.list_price.toLocaleString()}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right">$${u.market_value.toLocaleString()}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right;color:#4ade80">${u.diff_pct}%</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${u.age_days || '?'}d</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${u.acres ? u.acres + 'a' : '-'}</td>
+          </tr>
+        `).join('') || '<tr><td colspan="7" style="text-align:center;color:#64748b;padding:1rem">No undervalued deals</td></tr>';
+
+        const dropsBody = document.getElementById('charts-drops-body');
+        dropsBody.innerHTML = (d.price_drops || []).map(p => {
+          const amt = p.old_price - p.new_price;
+          const pct2 = p.old_price ? Math.round(amt / p.old_price * 100) : 0;
+          return `<tr>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${p.url ? `<a href="${p.url}" target="_blank" style="color:#60a5fa">${escapeHtml(p.address)}</a>` : escapeHtml(p.address)}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${escapeHtml(p.city)}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right">$${p.old_price.toLocaleString()}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right">$${p.new_price.toLocaleString()}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right;color:#4ade80">-$${amt.toLocaleString()} (-${pct2}%)</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b">${p.detected_at || '-'}</td>
+          </tr>`;
+        }).join('') || '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:1rem">No price drops</td></tr>';
+
+        const ownersBody = document.getElementById('charts-owners-body');
+        ownersBody.innerHTML = (d.multi_owners || []).map(o => `
+          <tr>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-weight:600;color:#f1f5f9">${escapeHtml(o.owner)}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right;color:#fbbf24">${o.count}</td>
+            <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-size:0.7rem;color:#94a3b8">${(o.addresses || []).slice(0,3).join(', ')}${o.addresses.length > 3 ? '...' : ''}</td>
+          </tr>
+        `).join('') || '<tr><td colspan="3" style="text-align:center;color:#64748b;padding:1rem">No multi-property owners</td></tr>';
+
+        const brokersBody = document.getElementById('charts-brokers-body');
+        brokersBody.innerHTML = (d.top_brokers || []).map(b => `<tr>
+          <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-weight:600;color:#f1f5f9">${escapeHtml(b.name)}</td>
+          <td style="padding:0.25rem 0.4rem;border-bottom:1px solid #1e293b;font-family:monospace;text-align:right;color:#60a5fa">${b.count}</td>
+        </tr>`).join('') || '<tr><td colspan="2" style="text-align:center;color:#64748b;padding:1rem">No broker data</td></tr>';
+
+        makeChart('chart-tiers', 'doughnut',
+          ['Undervalued','At Value','Premium','Overpriced'],
+          [d.tiers.undervalued, d.tiers.at_value, d.tiers.premium, d.tiers.overpriced],
+          ['#4ade80','#60a5fa','#fbbf24','#f87171']);
+
+        makeChart('chart-age', 'doughnut',
+          ['New (≤14d)', 'Older'],
+          [d.new_count || 0, d.old_count || 0],
+          ['#6ee7b7', '#475569']);
+
+        const cities = d.cities || [];
+        makeChart('chart-cities', 'bar',
+          cities.map(c => c.city),
+          [cities.map(c => c.total), cities.map(c => c.undervalued), cities.map(c => c.absentee)],
+          { labels: ['Total', 'Undervalued', 'Absentee'], colors: ['#334155', '#4ade80', '#fbbf24'] });
+
+        chartInstances._loaded = true;
+      } catch(e) {
+        console.error('Charts load failed', e);
+      }
+    }
+
+    function makeChart(id, type, labels, data, color) {
+      if (chartInstances[id]) chartInstances[id].destroy();
+      const ctx = document.getElementById(id).getContext('2d');
+      const isPie = type === 'doughnut';
+      const isGrouped = type === 'bar' && Array.isArray(data[0]);
+
+      if (isGrouped) {
+        chartInstances[id] = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: color.labels.map((l, i) => ({
+              label: l,
+              data: data[i],
+              backgroundColor: color.colors[i],
+              borderRadius: 3
+            }))
+          },
+          options: {
+            responsive: true, maintainAspectRatio: true,
+            plugins: { legend: { position: 'top', labels: { color: '#94a3b8', boxWidth: 12, padding: 8, font: {size:10} } } },
+            scales: {
+              x: { ticks: { color: '#64748b', font: {size:10} }, grid: { display: false } },
+              y: { ticks: { color: '#64748b', font: {size:10} }, grid: { color: '#1e293b' }, beginAtZero: true }
+            }
+          }
+        });
+        return;
+      }
+
+      const horizontal = false;
+      chartInstances[id] = new Chart(ctx, {
+        type,
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: isPie ? color : Array.isArray(color) ? color : (labels.map(() => color)),
+            borderWidth: 0,
+            borderRadius: isPie ? 0 : 3
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          indexAxis: horizontal ? 'y' : undefined,
+          plugins: {
+            legend: isPie ? { position:'bottom', labels:{ color:'#94a3b8', padding:12 } } : { display: false }
+          },
+          scales: isPie ? {} : {
+            x: horizontal ? { ticks:{ color:'#64748b', font:{size:9} }, grid:{color:'#1e293b'} } : { ticks:{ color:'#64748b', font:{size:9}, maxRotation:45 }, grid:{display:false} },
+            y: horizontal ? { ticks:{ color:'#94a3b8', font:{size:9} }, grid:{display:false} } : { ticks:{ color:'#64748b', font:{size:10} }, grid:{color:'#1e293b'} }
+          }
+        }
+      });
+    }
+
+    async function loadCities() {
+      try {
+        const r = await fetch('/api/cities');
+        const cities = await r.json();
+        const sel = document.getElementById('filter-city');
+        const groups = {};
+        for (const c of cities) {
+          const key = c.state;
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(c.city);
+        }
+        for (const [state, cityList] of Object.entries(groups)) {
+          const opt = document.createElement('optgroup');
+          opt.label = state;
+          for (const city of cityList.sort()) {
+            const o = document.createElement('option');
+            o.value = city;
+            o.textContent = city;
+            opt.appendChild(o);
+          }
+          sel.appendChild(opt);
+        }
+      } catch(e) { /* ignore */ }
+    }
+
+    async function fetchHealth() {
+      try {
+        const r = await fetch('/api/health');
+        const h = await r.json();
+        const dot = document.getElementById('health-dot');
+        const tip = document.getElementById('health-tooltip');
+        const link = document.getElementById('health-link');
+
+        const host = window.location.hostname;
+        link.href = `http://${host}:3000/d/scrape-health/realtor-scrape-health?orgId=1`;
+
+        let color, lines = [];
+        if (h.status === 'ok') {
+          color = '#4ade80';
+          lines.push('<span style="color:#4ade80">●</span> <b>All systems OK</b>');
+        } else if (h.status === 'warning') {
+          color = '#fbbf24';
+          lines.push('<span style="color:#fbbf24">●</span> <b>Warning</b>');
+          if (h.stale) lines.push('  Stale — last run >48h ago');
+          if (h.errors) lines.push(`  ${h.errors} error(s)`);
+        } else {
+          color = '#f87171';
+          lines.push('<span style="color:#f87171">●</span> <b>Error</b>');
+          lines.push('  ' + (h.message || 'Unknown'));
+        }
+        dot.style.background = color;
+        lines.push(`<span style="color:#64748b">Job:</span> ${h.job || '?'}`);
+        lines.push(`<span style="color:#64748b">Ran:</span> ${h.finished_at ? new Date(h.finished_at).toLocaleString() : 'never'}`);
+        lines.push(`<span style="color:#64748b">Age:</span> ${h.age_hours ? h.age_hours.toFixed(1) : '?'}h`);
+        lines.push(`<span style="color:#64748b">Errors:</span> ${h.errors ?? '?'}`);
+
+        tip.innerHTML = lines.join('<br>');
+        dot.addEventListener('mouseenter', () => tip.style.display = 'block');
+        dot.addEventListener('mouseleave', () => tip.style.display = 'none');
+      } catch(e) { /* ignore */ }
+    }
+
+    initMap();
+    fetchData();
+    fetchStats();
+    fetchHealth();
+    loadCities();
+    loadCharts().then(() => {
+      document.getElementById('charts-view').style.display = 'none';
+      chartInstances._loaded = true;
+    });
+  </script>
+  </div>
+</body>
+</html>

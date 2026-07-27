@@ -1,0 +1,12 @@
+services:
+  flask-app:
+    volumes:
+      - ./app:/app/app
+      - ./logger_setup.py:/app/logger_setup.py
+      - ./db.py:/app/db.py
+      - ./mongo_db.py:/app/mongo_db.py
+      - ./otel_utils.py:/app/otel_utils.py
+      - ./schema.sql:/app/schema.sql
+    command: >-
+      opentelemetry-instrument gunicorn --reload -w 1 -b 0.0.0.0:5001
+      --access-logfile - --error-logfile - app.main:app

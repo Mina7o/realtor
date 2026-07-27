@@ -4,11 +4,26 @@ venv/
 .env
 .opencode/
 openspec/
-county_parcels_full.db
+
+# Databases (scraped/regenerated)
+*.db
 *.db-shm
 *.db-wal
 
-# Custom additions
-*.log
+# Data files (large, regenerated)
+data/
+cache/
 output/
+
+# Logs
+*.log
+
+# Environment
+.env.groq
 .crawl4ai_profile/
+
+# Local files
+bridge data
+charlotte_deals.csv
+realtor_block.jpg
+graphify-out/

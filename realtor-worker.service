@@ -1,0 +1,16 @@
+[Unit]
+Description=Realtor Temporal Worker
+After=network.target
+
+[Service]
+Type=simple
+User=euclid
+WorkingDirectory=/home/euclid/Documents/proj/realtor
+Environment=PYTHONUNBUFFERED=1
+Environment=OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+ExecStart=/home/euclid/Documents/proj/realtor/venv/bin/python3 -m app.workflows.worker
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

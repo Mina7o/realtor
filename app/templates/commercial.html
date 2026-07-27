@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Commercial Sites — Data Center Pipeline</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css" />
+
+</head>
+<body class="dashboard-body">
+<div class="page-shell">
+  <section class="glass-hero">
+    <div class="hero-grid">
+      <div class="hero-stack">
+        <div class="hero-kicker">Commercial Siting Command</div>
+        <h1 class="animate-title">Data Center Pipeline</h1>
+        <p class="hero-subtitle">Glassmorphism control room for parcel screening, substation proximity, transmission adjacency, and Texas expansion monitoring.</p>
+      </div>
+      <div class="hero-actions">
+        <div class="header-links">
+          <span class="nav-badge commercial">Commercial</span>
+          <a href="/commercial" class="nav-link active">Sites</a>
+          <a href="/insights" class="nav-link">Insights</a>
+          <a href="/commercial_charts" class="nav-link">Infrastructure Alpha</a>
+          <a href="/code-graph" target="_blank" class="nav-graph">Code Graph</a>
+          <a href="/" class="nav-residential">Residential View</a>
+          <a id="health-link" href="http://localhost:3000/d/scrape-health/realtor-scrape-health?orgId=1" target="_blank" class="health-link">
+            <span id="health-dot" class="health-dot"></span>
+            <span class="health-label">Health</span>
+            <div id="health-tooltip" class="health-tooltip"></div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+<div class="container">
+  <div class="tab-bar">
+    <button id="tab-parcels" class="tab-btn active" onclick="switchTab('parcels')">Parcels</button>
+    <button id="tab-listings" class="tab-btn" onclick="switchTab('listings')">For-Sale Listings</button>
+  </div>
+
+  <div id="tab-content-parcels" class="tab-content active">
+    <div id="stats-parcels" class="stats"></div>
+    <div id="system-status" class="stat-card" onclick="fetchPulse()">
+      <div class="label">System Status</div>
+      <div class="value" id="pulse-summary" style="font-size:16px">Loading...</div>
+      <div id="pulse-detail" style="font-size:10px;color:#8899aa;margin-top:4px"></div>
+    </div>
+    <div id="map-parcels"></div>
+    <div style="display:flex;gap:6px;padding:4px 0">
+      <button id="toggle-sub-btn" onclick="toggleSubstations()" style="background:#1d9bf033;border:1px solid #1d9bf0;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px">Substations</button>
+      <button id="toggle-grid-btn" onclick="toggleTransmission()" style="background:#ff880033;border:1px solid #ff8800;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px">▬ Grid Lines</button>
+      <button id="toggle-texas-btn" onclick="toggleTexasFeed()" style="background:#ffad1f22;border:1px solid #ffad1f;color:#ffad1f;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px">Texas Frontier Feed</button>
+    </div>
+    <div class="filters">
+      <div><label>Tier</label><select id="filter-tier"><option value="">All</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div>
+      <div><label>County</label><select id="filter-county"><option value="">All</option></select></div>
+      <div><label>Min Acres</label><input type="number" id="filter-acres" placeholder="10" min="0" step="5" style="width:80px"></div>
+      <div><label>Min Score</label><input type="number" id="filter-score" placeholder="0" min="0" max="100" step="5" style="width:70px"></div>
+      <div><label>Substation (mi)</label><select id="filter-substation"><option value="">Any</option><option value="1">&lt; 1 mi</option><option value="3">&lt; 3 mi</option><option value="5">&lt; 5 mi</option><option value="10">&lt; 10 mi</option></select></div>
+      <div><label>Owner</label><input type="text" id="filter-owner" placeholder="Search owner..." style="width:160px"></div>
+      <div style="display:flex;gap:6px;align-items:end">
+        <button onclick="loadSites()" style="background:#1d9bf0;border:none;color:#fff;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px">Apply</button>
+        <button onclick="resetFilters()" style="background:#2a3040;border:none;color:#8899aa;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px">Clear</button>
+      </div>
+    </div>
+    <div id="quiet-portfolio" class="stats" style="margin-top:6px;margin-bottom:6px;"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Score</th>
+          <th>Tier</th>
+          <th>Acres</th>
+          <th>Address</th>
+          <th>Owner</th>
+          <th>County</th>
+          <th>Zoning</th>
+          <th>Code</th>
+          <th>Ready</th>
+          <th>Power</th>
+          <th>Sub</th>
+          <th>Asm</th>
+          <th>Use</th>
+          <th>Area</th>
+          <th>Last Sale</th>
+        </tr>
+      </thead>
+      <tbody id="sites-body">
+        <tr><td colspan="15" class="loading">Loading...</td></tr>
+      </tbody>
+    </table>
+    <div class="pagination" id="pagination-parcels"></div>
+  </div>
+
+  <div id="tab-content-listings" class="tab-content">
+    <div id="stats-listings" class="stats"></div>
+    <div id="map-listings"></div>
+    <div class="filters">
+      <div><label>County</label><select id="filter-listing-county"><option value="">All</option></select></div>
+      <div><label>Min Acres</label><input type="number" id="filter-listing-acres" placeholder="10" min="0" step="5" style="width:80px"></div>
+      <div style="display:flex;align-items:end;gap:4px"><label style="margin:0">Clusters only</label><input type="checkbox" id="filter-clusters-only" onchange="loadListings()" style="width:16px;height:16px"></div>
+      <div style="display:flex;gap:6px;align-items:end">
+        <button onclick="loadListings()" style="background:#1d9bf0;border:none;color:#fff;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px">Apply</button>
+        <button onclick="document.getElementById('filter-listing-county').value='';document.getElementById('filter-listing-acres').value='';loadListings()" style="background:#2a3040;border:none;color:#8899aa;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px">Clear</button>
+      </div>
+    </div>
+    <div id="cluster-info" style="font-size:13px;color:#8899aa;margin-bottom:6px"></div>
+    <div id="cluster-detail" style="margin-bottom:8px"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Price</th>
+          <th>Acres</th>
+          <th>Score</th>
+          <th>County</th>
+          <th>Title / Description</th>
+          <th>LandAndFarm</th>
+        </tr>
+      </thead>
+      <tbody id="listings-body">
+        <tr><td colspan="6" class="loading">Loading...</td></tr>
+      </tbody>
+    </table>
+    <div class="pagination" id="pagination-listings"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal-content" id="modal-content"></div>
+</div>
+
+</div>
+
+<script>
+let currentPage = 0;
+const PAGE_SIZE = 100;
+let allSites = [];
+let map = null;
+let markersGroup = null;
+let substationLayer = null;
+let showSubstations = true;
+let currentTab = 'parcels';
+
+function initMap(containerId) {
+  const m = L.map(containerId).setView([35.4, -80.0], 8);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18, attribution: '&copy; OpenStreetMap'
+  }).addTo(m);
+
+  fetch('/static/power_grid.json').then(r => r.json()).then(grid => {
+    L.geoJSON(grid, {
+      style: { color: '#ff4444', weight: 3, opacity: 0.7 },
+      onEachFeature: (f, layer) => {
+        layer.bindPopup(`<b>${f.properties.voltage}</b> ${f.properties.operator || ''}`);
+      }
+    }).addTo(m);
+  }).catch(e => console.warn('power grid:', e));
+
+  const legend = L.control({position: 'bottomright'});
+  legend.onAdd = () => {
+    const div = L.DomUtil.create('div', 'legend');
+    div.style.cssText = 'background:#1a1f2e;padding:10px;border-radius:6px;border:1px solid #2a3040;font-size:12px;line-height:1.6';
+    const isListings = containerId === 'map-listings';
+    const extra = isListings
+      ? `<div style="margin-top:4px"><span style="background:#ff880022;border:1px solid #ff8800;padding:0 6px;border-radius:2px;margin-right:2px">&nbsp;&nbsp;&nbsp;</span> Cluster (2-3 parcels)</div>
+         <div><span style="background:#f4424222;border:1px solid #f44242;padding:0 6px;border-radius:2px;margin-right:2px">&nbsp;&nbsp;&nbsp;</span> Large cluster (5+)</div>
+         <div><span style="background:#445566;border:1px solid #3d4d5e;padding:0 6px;border-radius:2px;margin-right:2px">&nbsp;&nbsp;&nbsp;</span> Isolated parcel</div>
+         <div style="color:#8899aa;margin-top:2px">Square area = listing acreage</div>`
+      : `<div><span style="background:#00ba7c33;border:1px solid #00ba7c;padding:0 6px;border-radius:2px;margin-right:2px">&nbsp;&nbsp;&nbsp;</span> Tier A</div>
+         <div><span style="background:#1d9bf033;border:1px solid #1d9bf0;padding:0 6px;border-radius:2px;margin-right:2px">&nbsp;&nbsp;&nbsp;</span> Tier B</div>
+         <div><span style="background:#ffad1f33;border:1px solid #ffad1f;padding:0 6px;border-radius:2px;margin-right:2px">&nbsp;&nbsp;&nbsp;</span> Tier C</div>
+         <div><span style="background:#f4212e33;border:1px solid #f4212e;padding:0 6px;border-radius:2px;margin-right:2px">&nbsp;&nbsp;&nbsp;</span> Tier D</div>
+         <div style="color:#8899aa;margin-top:2px">Square area = parcel acreage; border = power provider</div>
+         <div style="margin-top:4px;color:#e1e8ed;font-weight:600;margin-bottom:2px">Substations</div>
+         <div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f4212e;margin-right:4px"></span> 500kV+</div>
+         <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff8800;margin-right:4px"></span> 230kV</div>
+         <div><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#1d9bf0;margin-right:4px"></span> 100-229kV</div>
+         <div><span style="display:inline-block;width:4px;height:4px;border-radius:50%;background:#8899aa;margin-right:4px"></span> &lt;100kV</div>`;
+    div.innerHTML = `
+      <div style="color:#e1e8ed;font-weight:600;margin-bottom:4px">Power Grid</div>
+      <div><span style="color:#ff4444;font-weight:700">━━</span> 230kV Transmission</div>
+      ${extra}
+      <div style="color:#8899aa">Data: OpenStreetMap</div>
+    `;
+    return div;
+  };
+  legend.addTo(m);
+  return m;
+}
+
+function addUserLocation(m) {
+  if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    console.warn('Geolocation suppressed: Non-secure context');
+    return;
+  }
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      L.circleMarker([pos.coords.latitude, pos.coords.longitude], {
+        radius: 8, color: '#1d9bf0', fillColor: '#1d9bf0', fillOpacity: 0.8, weight: 3
+      }).bindPopup('<b>You are here</b>').addTo(m);
+    }, () => {},
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+function getTierColor(tier) {
+  return {A: '#00ba7c', B: '#1d9bf0', C: '#ffad1f', D: '#f4212e'}[tier] || '#8899aa';
+}
+
+function getVoltageColor(kv) {
+  if (kv >= 500) return '#f4212e';
+  if (kv >= 230) return '#ff8800';
+  if (kv >= 100) return '#1d9bf0';
+  return '#8899aa';
+}
+
+function getVoltageLabel(kv) {
+  if (!kv || kv < 0) return 'Unknown kV';
+  if (kv >= 1000) return `${(kv/1000).toFixed(0)}MV`;
+  return `${kv}kV`;
+}
+
+async function loadSubstations() {
+  const county = document.getElementById('filter-county').value;
+  const params = new URLSearchParams();
+  if (county) params.set('county', county);
+  if (showTexas) params.set('state', 'TX');
+  else params.set('state', 'NC'); // Default to NC
+  params.set('min_volt', '69');
+  const r = await fetch(`/api/substations?${params}`);
+  const data = await r.json();
+  return data.substations;
+}
+
+let transmissionLayer = null;
+let showTransmission = true;
+let transmissionCache = null;
+
+async function loadTransmissionLines() {
+  const b = map.getBounds();
+  const boundsStr = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+  let url = `/api/transmission-lines?min_volt=230&bounds=${boundsStr}`;
+  if (showTexas) url += '&state=TX';
+  const r = await fetch(url);
+  return await r.json();
+}
+
+function displayTransmissionLines(data) {
+  if (transmissionLayer) map.removeLayer(transmissionLayer);
+  if (!showTransmission || !data.features) return;
+  
+  transmissionLayer = L.geoJSON(data, {
+    style: function(feature) {
+      const v = feature.properties.voltage;
+      return {
+        color: getVoltageColor(v),
+        weight: v >= 345 ? 3 : v >= 230 ? 2 : 1,
+        opacity: 0.8
+      };
+    },
+    onEachFeature: function(feature, layer) {
+      layer.bindPopup(`<b>${feature.properties.voltage}kV Line</b><br>${feature.properties.owner}`);
+    }
+  }).addTo(map);
+}
+
+function toggleTransmission() {
+  showTransmission = !showTransmission;
+  loadTransmissionLines().then(data => displayTransmissionLines(data));
+  document.getElementById('toggle-grid-btn').style.background = showTransmission ? '#ff880033' : '#2a3040';
+}
+
+function displaySubstations(subs) {
+  if (substationLayer) {
+    if (substationLayer._zoomHandler) map.off('zoomend', substationLayer._zoomHandler);
+    map.removeLayer(substationLayer);
+    substationLayer = null;
+  }
+  if (!showSubstations || !subs.length) return;
+  substationLayer = L.layerGroup().addTo(map);
+  subs.forEach(s => {
+    if (!s.lat || !s.lng) return;
+    const kv = s.max_volt;
+    const color = getVoltageColor(kv);
+    L.circleMarker([s.lat, s.lng], {
+      radius: 1.5, color: color, weight: 1.5, fill: false
+    }).addTo(substationLayer);
+  });
+
+  // Only show substations when zoomed in (zoom >= 10)
+  const zoomHandler = () => {
+    const z = map.getZoom();
+    substationLayer.eachLayer(m => {
+      m.setStyle({
+        radius: z >= 12 ? 5 : z >= 10 ? 3 : 0,
+        opacity: z >= 10 ? 1 : 0
+      });
+    });
+  };
+  map.on('zoomend', zoomHandler);
+  zoomHandler();
+  substationLayer._zoomHandler = zoomHandler;
+}
+
+function getProviderColor(provider) {
+  const p = (provider || '').toLowerCase();
+  if (p.includes('duke')) return '#1d9bf0';
+  if (p.includes('union')) return '#ff8800';
+  if (p.includes('york')) return '#00ba7c';
+  if (p.includes('energy')) return '#1d9bf0';
+  return '#8899aa';
+}
+
+// --- Parcels tab ---
+
+async function buildMapParcels() {
+  if (!document.getElementById('map-parcels')._leaflet_id) {
+    map = initMap('map-parcels');
+    addUserLocation(map);
+  }
+  if (markersGroup) map.removeLayer(markersGroup);
+  markersGroup = L.layerGroup().addTo(map);
+
+  const county = document.getElementById('filter-county').value;
+  const minAcres = document.getElementById('filter-acres').value;
+  const minScore = document.getElementById('filter-score').value;
+  const owner = document.getElementById('filter-owner').value;
+
+  let sites = [];
+  if (!county) {
+    const countySelect = document.getElementById('filter-county');
+    const allCounties = Array.from(countySelect.options).slice(1).map(o => o.value);
+    for (const c of allCounties) {
+      const p = new URLSearchParams({limit: 8, tier: 'A,B', sort: 'score_total', county: c});
+      if (minAcres) p.set('min_acres', minAcres);
+      if (minScore) p.set('min_score', minScore);
+      if (owner) p.set('owner', owner);
+      const r = await fetch(`/api/commercial-sites?${p}`);
+      const d = await r.json();
+      sites = sites.concat(d.sites);
+    }
+    sites.sort((a, b) => (parseInt(b.score_total)||0) - (parseInt(a.score_total)||0));
+  } else {
+    const p = new URLSearchParams({limit: 60, tier: 'A,B', sort: 'score_total', county});
+    if (minAcres) p.set('min_acres', minAcres);
+    if (minScore) p.set('min_score', minScore);
+    if (owner) p.set('owner', owner);
+    const r = await fetch(`/api/commercial-sites?${p}`);
+    const d = await r.json();
+    sites = d.sites;
+  }
+
+  sites.forEach(s => {
+    const lat = parseFloat(s.lat), lng = parseFloat(s.lng);
+    if (!lat || !lng) return;
+    const acres = parseFloat(s.acres) || 0;
+    const side = acresToMeters(acres);
+    const bounds = makeSquareBounds(lat, lng, side);
+    const tierColor = getTierColor(s.score_tier);
+    const pcolor = getProviderColor(s.power_provider);
+    const subDist = s.substation_distance_miles ? `${s.substation_distance_miles} mi` : '—';
+    const subScore = s.score_substation ? `${s.score_substation}pts` : '';
+    L.rectangle(bounds, {
+      color: pcolor, fillColor: tierColor, fillOpacity: 0.25, weight: 1.5
+    }).bindPopup(`
+      <b>${s.score_tier} ${s.score_total}pts</b> | ${acres.toLocaleString()} ac<br>
+      <b>${s.owner_name}</b><br>${s.address || ''}<br>
+      Power: ${s.power_provider || '?'}<br>Zoning: ${s.zoning || '?'}<br>
+      Substation: ${subDist} ${subScore}
+      ${parseInt(s.has_assembly_bonus)?'<br><b style="color:#00ba7c">+50 Assembly Bonus</b>':''}
+    `).addTo(markersGroup);
+  });
+  loadSubstations().then(subs => displaySubstations(subs));
+  loadTransmissionLines().then(data => displayTransmissionLines(data));
+  setTimeout(() => map.invalidateSize(), 100);
+}
+
+let showTexas = false;
+
+async function toggleTexasFeed() {
+  transmissionCache = null;
+  showTexas = !showTexas;
+  const btn = document.getElementById('toggle-texas-btn');
+  btn.style.background = showTexas ? '#ffad1f' : '#ffad1f22';
+  btn.style.color = showTexas ? '#000' : '#ffad1f';
+  
+  if (showTexas) {
+    map.setView([32.7767, -96.7970], 10); // Center on Dallas
+    loadTexasSites();
+  } else {
+    map.setView([35.4, -80.0], 8); // Back to NC
+    loadSites();
+    loadSubstations().then(subs => displaySubstations(subs));
+    loadTransmissionLines().then(data => displayTransmissionLines(data));
+  }
+}
+
+async function loadTexasSites() {
+  markersGroup.clearLayers();
+  const r = await fetch('/api/texas-sites');
+  const d = await r.json();
+  
+  d.sites.forEach(s => {
+    const lat = parseFloat(s.lat), lng = parseFloat(s.lng);
+    if (!lat || !lng) return;
+    const acres = parseFloat(s.acres) || 0;
+    const side = acresToMeters(acres);
+    const bounds = makeSquareBounds(lat, lng, side);
+    const tierColor = s.score_tier === 'A' ? '#00ba7c' : s.score_tier === 'B' ? '#1d9bf0' : '#ffad1f';
+    const isShovelReady = s.attom_zoning_code && s.attom_zoning_code !== '' && s.attom_zoning_code !== '—';
+    const distTx = s.distance_transmission_miles;
+    const distDisplay = distTx !== null && distTx !== undefined ? parseFloat(distTx).toFixed(2) + ' mi' : '—';
+    const shovelTag = isShovelReady ? '<span style="background:#00ba7c;color:#fff;font-size:10px;font-weight:600;padding:2px 8px;border-radius:3px;letter-spacing:0.3px;font-family:\'JetBrains Mono\',monospace">SHOVEL-READY</span>' : '';
+    const riskLabel = s.county === 'dallas' ? 'HIGH' : 'LOW';
+    const riskColor = s.county === 'dallas' ? '#f4212e' : '#00ba7c';
+    
+    L.rectangle(bounds, {
+      color: '#fff', weight: 0.5, fillColor: tierColor, fillOpacity: 0.5, dashArray: '2, 2'
+    }).bindPopup(
+      '<div style="font-family:\'Inter\',system-ui,sans-serif;font-size:12px;line-height:1.5;min-width:220px;">' +
+      '<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:#ffad1f;text-transform:uppercase;margin-bottom:4px;">Texas Frontier</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
+      '<span style="color:' + tierColor + ';font-weight:700;font-size:14px;font-family:\'JetBrains Mono\',monospace">' + s.score_tier + ' ' + s.score_total + 'pts</span>' +
+      '<span style="color:#8899aa;font-size:11px;">|</span>' +
+      '<span style="color:#e4e8f0;font-size:13px;font-family:\'JetBrains Mono\',monospace">' + acres.toLocaleString() + ' ac</span>' +
+      shovelTag +
+      '</div>' +
+      '<div style="margin-bottom:6px;"><span style="color:#e4e8f0;font-weight:600;">' + (s.owner_name || '—') + '</span><br><span style="color:#8899aa;font-size:11px;">' + (s.address || '—') + '</span></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;padding:6px 8px;background:#0f1219;border-radius:4px;margin-top:4px;">' +
+      '<div><span style="color:#8899aa;font-size:10px;">ZONING</span><br><span style="color:#e4e8f0;font-size:11px;font-family:\'JetBrains Mono\',monospace">' + (s.attom_zoning_code || s.zoning || '—') + '</span></div>' +
+      '<div><span style="color:#8899aa;font-size:10px;">GRID PROXIMITY</span><br><span style="color:#e4e8f0;font-size:11px;font-family:\'JetBrains Mono\',monospace">' + distDisplay + '</span></div>' +
+      '<div><span style="color:#8899aa;font-size:10px;">LAND USE</span><br><span style="color:#e4e8f0;font-size:11px;font-family:\'JetBrains Mono\',monospace">' + (s.attom_land_use_desc || s.zoning || '—') + '</span></div>' +
+      '<div><span style="color:#8899aa;font-size:10px;">POWER PROVIDER</span><br><span style="color:#e4e8f0;font-size:11px;font-family:\'JetBrains Mono\',monospace">' + (s.power_provider || '—') + '</span></div>' +
+      '</div>' +
+      '<div style="margin-top:4px;font-size:10px;color:' + riskColor + ';font-weight:600;font-family:\'JetBrains Mono\',monospace">ERCOT Congestion: ' + riskLabel + '</div>' +
+      '</div>'
+    ).addTo(markersGroup);
+  });
+  
+  // High-Density Infrastructure Load
+  loadSubstations().then(subs => displaySubstations(subs));
+  loadTransmissionLines().then(data => displayTransmissionLines(data));
+}
+
+function toggleSubstations() {
+  showSubstations = !showSubstations;
+  loadSubstations().then(subs => displaySubstations(subs));
+  document.getElementById('toggle-sub-btn').style.background = showSubstations ? '#1d9bf033' : '#2a3040';
+}
+
+function showModal(s) {
+  const mapLink = s.lat && s.lng
+    ? `https://www.google.com/maps?q=${s.lat},${s.lng}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((s.address||'') + ', ' + (s.county === 'york' ? 'SC' : 'NC'))}`;
+  document.getElementById('modal-content').innerHTML = `
+    <span class="close" onclick="closeModal()">&times;</span>
+    <h2><span class="badge badge-${(s.score_tier||'D').toLowerCase()}">${s.score_tier||'D'}</span> ${s.score_total||0} pts — ${s.acres||0} ac ${s.attom_zoning_code ? '<span class="badge badge-a" style="background:#00ba7c;color:#fff;font-size:11px">SHOVEL-READY</span>' : (s.zoning && s.zoning !== '—' ? '<span class="badge badge-b" style="background:#ffad1f;color:#fff;font-size:11px">ZONED</span>' : '')}</h2>
+    <div class="section">
+      <div class="stat-row"><span class="label">Owner</span><span class="value">${s.owner_name||'—'}</span></div>
+      <div class="stat-row"><span class="label">Address</span><span class="value">${s.address||'—'}, ${s.county||''}</span></div>
+      <div class="stat-row"><span class="label">Land Use</span><span class="value">${s.land_use||'—'}</span></div>
+      <div class="stat-row"><span class="label">Area</span><span class="value">${s.neighborhood||'—'}</span></div>
+      <div class="stat-row"><span class="label">County</span><span class="value">${s.county||'—'}</span></div>
+    </div>
+    <div class="section">
+      <h3>Score Breakdown</h3>
+      <div class="score-breakdown">
+        <div class="score-item"><div class="val" style="color:${parseInt(s.score_acreage)>=20?'#00ba7c':parseInt(s.score_acreage)>=10?'#ffad1f':'#f4212e'}">${s.score_acreage||0}/25</div><div class="desc">Acreage</div></div>
+        <div class="score-item"><div class="val" style="color:${parseInt(s.score_land_use)>=20?'#00ba7c':parseInt(s.score_land_use)>=10?'#ffad1f':'#f4212e'}">${s.score_land_use||0}/25</div><div class="desc">Land Use</div></div>
+        <div class="score-item"><div class="val" style="color:${parseInt(s.score_vacancy)>=8?'#00ba7c':parseInt(s.score_vacancy)>=4?'#ffad1f':'#f4212e'}">${s.score_vacancy||0}/10</div><div class="desc">Vacancy</div></div>
+        <div class="score-item"><div class="val" style="color:${parseInt(s.score_owner)>=8?'#00ba7c':parseInt(s.score_owner)>=5?'#ffad1f':'#f4212e'}">${s.score_owner||0}/10</div><div class="desc">Owner Type</div></div>
+        <div class="score-item"><div class="val" style="color:${parseInt(s.score_density)>=4?'#00ba7c':parseInt(s.score_density)>=2?'#ffad1f':'#f4212e'}">${s.score_density||0}/5</div><div class="desc">Industrial Density</div></div>
+        <div class="score-item"><div class="val" style="color:${parseInt(s.score_zoning)>=12?'#00ba7c':parseInt(s.score_zoning)>=6?'#ffad1f':'#f4212e'}">${s.score_zoning||0}/15</div><div class="desc">Zoning</div></div>
+        <div class="score-item"><div class="val" style="color:${parseInt(s.score_flood)>=4?'#00ba7c':'#f4212e'}">${s.score_flood||0}/5</div><div class="desc">Flood Safe</div></div>
+        <div class="score-item"><div class="val" style="color:${parseInt(s.score_econ_dev)>=4?'#00ba7c':'#8899aa'}">${s.score_econ_dev||0}/5</div><div class="desc">Econ Dev Zone</div></div>
+        <div class="score-item" style="${parseInt(s.has_assembly_bonus)?'background:#00ba7c11;border:1px solid #00ba7c44':''}"><div class="val" style="color:${parseInt(s.has_assembly_bonus)?'#00ba7c':'#334155'}">${parseInt(s.has_assembly_bonus)?'+50':'0'}</div><div class="desc">Assembly Bonus</div></div>
+      </div>
+    </div>
+    <div class="section">
+      <h3>Site Characteristics</h3>
+      <div class="stat-row"><span class="label">Zoning (County)</span><span class="value">${s.zoning||'—'}</span></div>
+      <div class="stat-row"><span class="label">Zoning (ATTOM)</span><span class="value" style="color:${s.attom_zoning_code?'#00ba7c':'#64748b'}">${s.attom_zoning_code||'—'} ${s.attom_zoning_code ? '<span class="badge badge-a" style="font-size:10px">Shovel-Ready</span>' : ''}</span></div>
+      <div class="stat-row"><span class="label">Land Use (ATTOM)</span><span class="value">${s.attom_land_use_desc||'—'}</span></div>
+      <div class="stat-row"><span class="label">Flood Zone</span><span class="value">${s.flood_zone||'None'}</span></div>
+      <div class="stat-row"><span class="label">Power Provider</span><span class="value">${s.power_provider||'—'}</span></div>
+      <div class="stat-row"><span class="label">Econ Dev Zone</span><span class="value">${s.econ_dev_zone||'—'}</span></div>
+      <div class="stat-row"><span class="label">Substation</span><span class="value">${s.substation_distance_miles ? s.substation_distance_miles + ' mi' : '—'} ${s.score_substation ? '· ' + s.score_substation + 'pts' : ''}</span></div>
+    </div>
+    <div class="section">
+      <h3>Sale History</h3>
+      <div class="stat-row"><span class="label">Last Sale Price</span><span class="value">${s.last_sale_price && s.last_sale_price!=='None' ? '$'+Number(s.last_sale_price).toLocaleString() : '—'}</span></div>
+      <div class="stat-row"><span class="label">Last Sale Date</span><span class="value">${s.last_sale_date && s.last_sale_date!=='None' ? s.last_sale_date.slice(0,10) : '—'}</span></div>
+      <div class="stat-row"><span class="label">Last Grantor</span><span class="value">${s.last_sale_grantor||'—'}</span></div>
+    </div>
+    <div style="margin-top:12px">
+      <a class="btn" href="${mapLink}" target="_blank">Open in Google Maps</a>
+    </div>
+  `;
+  document.getElementById('modal-overlay').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('show');
+}
+
+async function loadStats() {
+  try {
+    const r = await fetch('/api/commercial-stats');
+    if (!r.ok) { console.error('loadStats fetch failed:', r.status); return; }
+    const data = await r.json();
+    const s = data.stats;
+    if (!s) { console.error('loadStats: no stats in response', data); return; }
+
+    const sel = document.getElementById('filter-county');
+    if (!sel) { console.error('loadStats: filter-county not found'); return; }
+    data.by_county.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.county;
+      opt.textContent = `${c.county} (${c.cnt})`;
+      sel.appendChild(opt);
+    });
+
+    const sp = document.getElementById('stats-parcels');
+    if (!sp) { console.error('loadStats: stats-parcels not found'); return; }
+    sp.innerHTML = `
+      <div class="stat-card"><div class="label">Total Sites</div><div class="value">${s.total}</div></div>
+      <div class="stat-card"><div class="label">Total Acres</div><div class="value">${Number(s.total_acres).toLocaleString()}</div></div>
+      <div class="stat-card"><div class="label">Avg Acres</div><div class="value">${s.avg_acres}</div></div>
+      <div class="stat-card tier-a"><div class="label">Tier A (65+)</div><div class="value">${s.tier_a}</div></div>
+      <div class="stat-card tier-b"><div class="label">Tier B (45-64)</div><div class="value">${s.tier_b}</div></div>
+      <div class="stat-card tier-c"><div class="label">Tier C (25-44)</div><div class="value">${s.tier_c}</div></div>
+      <div class="stat-card tier-d"><div class="label">Tier D (&lt;25)</div><div class="value">${s.tier_d}</div></div>
+      <div class="stat-card"><div class="label">Avg Score</div><div class="value">${s.avg_score}</div></div>
+      <div class="stat-card"><div class="label">Counties</div><div class="value">${data.by_county.length}</div></div>
+      ${data.ercot_risk && data.ercot_risk.length > 0 ? `
+      <div class="stat-card"><div class="label">ERCOT Risk</div><div class="value">${data.ercot_risk.map(r => r.ercot_risk_score).join(' / ')}</div></div>
+      ` : ''}
+    `;
+  } catch(e) { console.error('loadStats error:', e); }
+}
+
+async function loadQuietCountyPortfolio() {
+  try {
+    const r = await fetch('/api/portfolio-quiet-counties');
+    const data = await r.json();
+    const p = data.portfolio;
+    const narrative = data.institutional_narrative;
+    const qp = document.getElementById('quiet-portfolio');
+    if (!qp) return;
+    const fmt = n => n === undefined ? '\u2014' : Number(n).toLocaleString();
+    const byCounty = data.by_county.map(c =>
+      '<div class="stat-card" style="flex:1;min-width:140px;">' +
+      '<div class="label">' + c.county + '</div>' +
+      '<div class="value" style="font-size:16px;">' + c.cnt + ' sites</div>' +
+      '<div style="font-size:11px;color:#8899aa;">' + fmt(c.total_ac) + 'ac &middot; avg ' + c.avg_score + 'pts</div>' +
+      '</div>'
+    ).join('');
+    qp.innerHTML =
+      '<h3 style="margin:0 0 10px 0;color:#00d4aa;">Institutional Portfolio — Quiet County Cluster</h3>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">' +
+      '<div class="stat-card"><div class="label">Sites</div><div class="value">' + p.total + '</div></div>' +
+      '<div class="stat-card"><div class="label">Total Acres</div><div class="value">' + fmt(p.total_acres) + '</div></div>' +
+      '<div class="stat-card"><div class="label">Avg Acres</div><div class="value">' + p.avg_acres + '</div></div>' +
+      '<div class="stat-card"><div class="label">Avg Assembly</div><div class="value">' + p.avg_assembly + '</div></div>' +
+      '<div class="stat-card"><div class="label">Assembly Ready</div><div class="value">' + p.assembly_ready_parcels + '</div></div>' +
+      '<div class="stat-card tier-a"><div class="label">Tier A</div><div class="value">' + p.tier_a + '</div></div>' +
+      '<div class="stat-card" style="border-color:#00d4aa44;">' +
+      '<div class="label">Est. Dev Value</div>' +
+      '<div class="value" style="color:#00d4aa;">$' + (data.est_development_value / 1e6).toFixed(1) + 'M</div>' +
+      '</div>' +
+      '</div>' +
+      '<div style="margin-top:6px;font-size:11px;color:#8899aa;border:1px solid #2a3040;border-radius:6px;padding:8px 12px;">' +
+      '<strong style="color:#00d4aa;">' + narrative.status + '</strong> — ' + narrative.strategy +
+      '<br>Cluster: ' + narrative.cluster + ' &middot; Bank: ' + fmt(narrative.acres) + 'ac @ $' + (narrative.value_per_acre/1e3).toFixed(0) + 'K/ac' +
+      '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">' + byCounty + '</div>';
+  } catch(e) { console.error('loadQuietCountyPortfolio error:', e); }
+}
+
+async function loadSites(page = 0) {
+  try {
+  currentPage = page;
+  const params = new URLSearchParams();
+  params.set('limit', PAGE_SIZE);
+  params.set('offset', page * PAGE_SIZE);
+  const tier = document.getElementById('filter-tier').value;
+  const county = document.getElementById('filter-county').value;
+  const minAcres = document.getElementById('filter-acres').value;
+  const minScore = document.getElementById('filter-score').value;
+  const maxSubDist = document.getElementById('filter-substation').value;
+  const owner = document.getElementById('filter-owner').value;
+  if (tier) params.set('tier', tier);
+  if (county) params.set('county', county);
+  if (minAcres) params.set('min_acres', minAcres);
+  if (minScore) params.set('min_score', minScore);
+  if (maxSubDist) params.set('max_sub_dist', maxSubDist);
+  if (owner) params.set('owner', owner);
+
+  const r = await fetch(`/api/commercial-sites?${params}`);
+  if (!r.ok) { console.error('loadSites fetch failed:', r.status); return; }
+  const data = await r.json();
+  allSites = data.sites;
+
+  const tbody = document.getElementById('sites-body');
+  if (allSites.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="15" class="loading">No sites match filters.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = allSites.map((s, idx) => {
+    const score = parseInt(s.score_total) || 0;
+    const tier = s.score_tier || 'D';
+    const acres = parseFloat(s.acres) || 0;
+    const pct = Math.min(score, 100);
+    const color = getTierColor(tier);
+    const salePrice = s.last_sale_price && s.last_sale_price !== 'None' ? `$${Number(s.last_sale_price).toLocaleString()}` : '';
+    const saleDate = s.last_sale_date && s.last_sale_date !== 'None' ? s.last_sale_date.slice(0, 10) : '';
+    const attomZone = s.attom_zoning_code || '';
+    const countyZone = s.zoning || '';
+    const isShovelReady = attomZone.length > 0 || (countyZone.length > 0 && countyZone !== '—');
+    return `<tr onclick="showModal(allSites[${idx}])">
+      <td><span class="score-bar"><span class="score-bar-inner"><span class="score-bar-fill" style="width:${pct}%;background:${color}"></span></span>${score}</span></td>
+      <td><span class="badge badge-${tier.toLowerCase()}">${tier}</span></td>
+      <td class="acres">${acres.toLocaleString()}</td>
+      <td>${s.address || '—'}</td>
+      <td class="owner-name" title="${s.owner_name}">${s.owner_name || '—'}</td>
+      <td><span class="county-badge">${s.county || '—'}</span></td>
+      <td>${(s.zoning||'—').slice(0,14)}</td>
+      <td style="color:${attomZone?'#00ba7c':'#334155'}">${attomZone ? attomZone.slice(0,10) : '—'}</td>
+      <td>${isShovelReady ? '<span style="color:#00ba7c;font-weight:700" title="Zoning on record">✓</span>' : '<span style="color:#64748b">○</span>'}</td>
+      <td>${(s.power_provider||'—').slice(0,22)}</td>
+      <td>${s.substation_distance_miles ? `${s.substation_distance_miles}mi` : '—'}</td>
+      <td style="color:${parseInt(s.has_assembly_bonus)?'#00ba7c':'#334155'};font-weight:600">${parseInt(s.has_assembly_bonus)?'+50':'—'}</td>
+      <td>${s.land_use || '—'}</td>
+      <td>${s.neighborhood || '—'}</td>
+      <td>${salePrice ? salePrice + (saleDate ? ' (' + saleDate + ')' : '') : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  const totalPages = Math.ceil(data.total / PAGE_SIZE);
+  document.getElementById('pagination-parcels').innerHTML = `
+    <button ${page <= 0 ? 'disabled' : ''} onclick="loadSites(${page - 1})">← Prev</button>
+    <span class="info">Page ${page + 1} of ${totalPages || 1} (${data.total} total)</span>
+    <button ${page >= totalPages - 1 ? 'disabled' : ''} onclick="loadSites(${page + 1})">Next →</button>
+  `;
+  buildMapParcels();
+  } catch(e) { console.error('loadSites error:', e); }
+}
+
+function resetFilters() {
+  ['filter-tier','filter-county','filter-acres','filter-score','filter-owner'].forEach(id => document.getElementById(id).value = '');
+  loadSites(0);
+}
+
+// --- Listings tab ---
+
+let listingsMap = null;
+let listingsMarkers = null;
+let allListingsData = [];
+
+function acresToMeters(acres) {
+  return Math.sqrt(Math.max(acres, 1) * 4046.86);
+}
+
+function makeSquareBounds(lat, lng, sideMeters) {
+  const half = sideMeters / 2;
+  const dLat = half / 111320;
+  const dLng = half / (111320 * Math.cos(lat * Math.PI / 180));
+  return [[lat - dLat, lng - dLng], [lat + dLat, lng + dLng]];
+}
+
+function detectClusters(listings) {
+  const gap = 50;
+  const groups = [];
+  const assigned = new Set();
+
+  for (let i = 0; i < listings.length; i++) {
+    if (assigned.has(i)) continue;
+    const group = [i];
+    assigned.add(i);
+    const a1 = parseFloat(listings[i].acres) || 10;
+    const r1 = acresToMeters(a1) / 2;
+
+    for (let j = i + 1; j < listings.length; j++) {
+      if (assigned.has(j)) continue;
+      const a2 = parseFloat(listings[j].acres) || 10;
+      const r2 = acresToMeters(a2) / 2;
+      const d = calcDistance(
+        listings[i].lat, listings[i].lng,
+        listings[j].lat, listings[j].lng
+      );
+      if (d < r1 + r2 + gap) {
+        group.push(j);
+        assigned.add(j);
+      }
+    }
+    groups.push(group);
+  }
+  return groups;
+}
+
+function calcDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function clusterColor(groupSize) {
+  if (groupSize >= 5) return { fill: '#f44242', stroke: '#c03030' };
+  if (groupSize >= 3) return { fill: '#ff8800', stroke: '#cc6600' };
+  if (groupSize >= 2) return { fill: '#ffad1f', stroke: '#e09020' };
+  return { fill: '#556677', stroke: '#3d4d5e' };
+}
+
+async function buildMapListings() {
+  if (!document.getElementById('map-listings')._leaflet_id) {
+    listingsMap = initMap('map-listings');
+  }
+  if (listingsMarkers) listingsMap.removeLayer(listingsMarkers);
+  listingsMarkers = L.layerGroup().addTo(listingsMap);
+
+  const county = document.getElementById('filter-listing-county').value;
+  const minAcres = document.getElementById('filter-listing-acres').value;
+  const showClustersOnly = document.getElementById('filter-clusters-only').checked;
+  const p = new URLSearchParams({limit: 500});
+  if (county) p.set('county', county);
+  if (minAcres) p.set('min_acres', minAcres);
+  const r = await fetch(`/api/landandfarm-listings?${p}`);
+  const data = await r.json();
+  allListingsData = data.listings.filter(l => l.lat && l.lng);
+
+  const clusters = detectClusters(allListingsData);
+  document.getElementById('cluster-info').textContent =
+    `${clusters.length} cluster${clusters.length !== 1 ? 's' : ''} (${allListingsData.length} parcels total)`;
+  document.getElementById('cluster-detail').innerHTML = clusters
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 5).map(g => {
+      const totalAc = g.reduce((s, i) => s + (parseFloat(allListingsData[i].acres) || 0), 0);
+      const totalPrice = g.reduce((s, i) => s + (allListingsData[i].price || 0), 0);
+      const color = clusterColor(g.length);
+      return `<div class="cluster-item">
+        <span style="display:inline-block;width:12px;height:12px;background:${color.fill};border:1px solid ${color.stroke};border-radius:2px"></span>
+        <b>${g.length} parcels</b> ${totalAc.toFixed(0)} ac ${totalPrice ? ' $' + totalPrice.toLocaleString() : ''}
+      </div>`;
+    }).join('') + (clusters.length > 5 ? `<div style="font-size:11px;color:#8899aa;margin-top:4px">… and ${clusters.length - 5} more</div>` : '');
+
+  allListingsData.forEach((l, idx) => {
+    const clusterIdx = clusters.findIndex(g => g.includes(idx));
+    const isCluster = clusterIdx >= 0 && clusters[clusterIdx].length >= 2;
+    if (showClustersOnly && !isCluster) return;
+
+    const acres = parseFloat(l.acres) || 0;
+    const side = acresToMeters(acres);
+    const bounds = makeSquareBounds(l.lat, l.lng, side);
+    const c = clusterColor(clusters[clusterIdx]?.length || 1);
+    const price = l.price ? `$${Number(l.price).toLocaleString()}` : 'N/A';
+    const groupSize = clusters[clusterIdx]?.length || 1;
+    const groupTotalAc = (clusters[clusterIdx] || [idx]).reduce((s, i) => s + (parseFloat(allListingsData[i].acres) || 0), 0);
+    const groupTotalPrice = (clusters[clusterIdx] || [idx]).reduce((s, i) => s + (allListingsData[i].price || 0), 0);
+
+    const tierColor = getTierColor(l.score_tier);
+    L.rectangle(bounds, {
+      color: isCluster ? c.stroke : '#3d4d5e',
+      fillColor: l.score_tier ? tierColor : (isCluster ? c.fill : '#445566'),
+      fillOpacity: l.score_tier ? 0.2 : 0.3, weight: 1.5
+    }).bindPopup(`
+      <span style="display:inline-block;background:${tierColor};color:#000;padding:0 6px;border-radius:3px;font-weight:700;font-size:11px;margin-right:4px">${l.score_tier || '?'}</span>
+      <b>${price}</b> | ${acres.toLocaleString()} ac | ${l.score_total || '?'}pts<br>
+      <span style="color:${isCluster ? '#ff8800' : '#8899aa'}">${isCluster ? '●' : '○'} ${groupSize} parcels in cluster, ${groupTotalAc.toFixed(0)} total ac${groupTotalPrice ? ', $' + groupTotalPrice.toLocaleString() : ''}</span><br>
+      ${l.title || l.address || ''}<br>
+      ${l.county}<br>
+      <a href="${l.url}" target="_blank">View on LandAndFarm</a>
+    `).addTo(listingsMarkers);
+  });
+  setTimeout(() => listingsMap.invalidateSize(), 100);
+}
+
+async function loadListingsStats() {
+  const r = await fetch('/api/landandfarm-stats');
+  const data = await r.json();
+  const s = data.stats;
+
+  const sel = document.getElementById('filter-listing-county');
+  data.by_county.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.county;
+    opt.textContent = `${c.county} (${c.cnt})`;
+    sel.appendChild(opt);
+  });
+
+  const avgPrice = s.avg_price ? `$${Number(s.avg_price).toLocaleString()}` : '—';
+  document.getElementById('stats-listings').innerHTML = `
+    <div class="stat-card"><div class="label">Total Listings</div><div class="value">${s.total}</div></div>
+    <div class="stat-card"><div class="label">Total Acres</div><div class="value">${Number(s.total_acres).toLocaleString()}</div></div>
+    <div class="stat-card"><div class="label">Avg Acres</div><div class="value">${s.avg_acres}</div></div>
+    <div class="stat-card"><div class="label">Avg Price</div><div class="value">${avgPrice}</div></div>
+    <div class="stat-card"><div class="label">Price Range</div><div class="value">$${Number(s.min_price).toLocaleString()} – $${Number(s.max_price).toLocaleString()}</div></div>
+    <div class="stat-card"><div class="label">Geocoded</div><div class="value">${s.geocoded}/${s.total}</div></div>
+    <div class="stat-card"><div class="label">Counties</div><div class="value">${data.by_county.length}</div></div>
+  `;
+}
+
+async function loadListings(page = 0) {
+  currentPage = page;
+  const params = new URLSearchParams();
+  params.set('limit', PAGE_SIZE);
+  params.set('offset', page * PAGE_SIZE);
+  const county = document.getElementById('filter-listing-county').value;
+  const minAcres = document.getElementById('filter-listing-acres').value;
+  if (county) params.set('county', county);
+  if (minAcres) params.set('min_acres', minAcres);
+
+  const r = await fetch(`/api/landandfarm-listings?${params}`);
+  const data = await r.json();
+
+  const tbody = document.getElementById('listings-body');
+  if (data.listings.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="loading">No listings match filters.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.listings.map(l => {
+    const price = l.price ? `$${Number(l.price).toLocaleString()}` : '<em>Auction</em>';
+    const desc = (l.description || '').slice(0, 120);
+    const tcolor = getTierColor(l.score_tier);
+    return `<tr onclick="showListingModal(${JSON.stringify(l).replace(/"/g, '&quot;')})">
+      <td class="acres">${price}</td>
+      <td class="acres">${l.acres}</td>
+      <td>${l.score_tier ? `<span style="display:inline-block;background:${tcolor};color:#000;padding:0 6px;border-radius:3px;font-weight:700;font-size:11px">${l.score_tier}</span>` : '—'}</td>
+      <td><span class="county-badge">${l.county}</span></td>
+      <td class="desc-cell" title="${l.title || l.address}">${l.title || l.address || '—'}</td>
+      <td><a href="${l.url}" target="_blank">View ↪</a></td>
+    </tr>`;
+  }).join('');
+
+  const totalPages = Math.ceil(data.total / PAGE_SIZE);
+  document.getElementById('pagination-listings').innerHTML = `
+    <button ${page <= 0 ? 'disabled' : ''} onclick="loadListings(${page - 1})">← Prev</button>
+    <span class="info">Page ${page + 1} of ${totalPages || 1} (${data.total} total)</span>
+    <button ${page >= totalPages - 1 ? 'disabled' : ''} onclick="loadListings(${page + 1})">Next →</button>
+  `;
+  buildMapListings();
+}
+
+function showListingModal(l) {
+  const price = l.price ? `$${Number(l.price).toLocaleString()}` : 'Auction';
+  const perAcre = l.price && l.acres ? `$${Math.round(l.price / l.acres).toLocaleString()}/ac` : '';
+  const mapLink = l.lat && l.lng
+    ? `https://www.google.com/maps?q=${l.lat},${l.lng}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(l.address || '')}`;
+  document.getElementById('modal-content').innerHTML = `
+    <span class="close" onclick="closeModal()">&times;</span>
+    ${l.score_tier ? `<span style="display:inline-block;background:${getTierColor(l.score_tier)};color:#000;padding:1px 8px;border-radius:3px;font-weight:700;font-size:13px;margin-bottom:6px">Tier ${l.score_tier} · ${l.score_total}pts</span>` : ''}
+    <h2>${l.title || 'Land Listing'}</h2>
+    <div class="section">
+      <div class="stat-row"><span class="label">Price</span><span class="value">${price}</span></div>
+      <div class="stat-row"><span class="label">Price per Acre</span><span class="value">${perAcre || '—'}</span></div>
+      <div class="stat-row"><span class="label">Acres</span><span class="value">${l.acres}</span></div>
+      <div class="stat-row"><span class="label">Score</span><span class="value">${l.score_total || '0'}/100 · Ac ${l.score_acreage||0} · $/ac ${l.score_ppa||0} · County ${l.score_county||0} · Clstr ${l.score_cluster||0} · Kwds ${l.score_keywords||0}</span></div>
+      <div class="stat-row"><span class="label">Address</span><span class="value">${l.address || '—'}</span></div>
+      <div class="stat-row"><span class="label">County</span><span class="value">${l.county}</span></div>
+    </div>
+    ${l.description ? `<div class="section"><h3>Description</h3><p style="font-size:14px;line-height:1.5">${l.description}</p></div>` : ''}
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <a class="btn" href="${l.url}" target="_blank">View on LandAndFarm</a>
+      <a class="btn" href="${mapLink}" target="_blank">Open in Google Maps</a>
+    </div>
+
+  `;
+  document.getElementById('modal-overlay').classList.add('show');
+}
+
+// --- Tab switching ---
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-bar .tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(`tab-content-${tab}`).classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  if (tab === 'listings') {
+    loadListingsStats().then(() => loadListings(0));
+  } else if (tab === 'parcels') {
+    setTimeout(() => { if (map) map.invalidateSize(); }, 100);
+  }
+}
+
+async function fetchHealth() {
+  try {
+    const r = await fetch('/api/health');
+    const h = await r.json();
+    const dot = document.getElementById('health-dot');
+    const tip = document.getElementById('health-tooltip');
+    const link = document.getElementById('health-link');
+
+    // Update direct link to Grafana
+    const host = window.location.hostname;
+    link.href = `http://${host}:3000/d/scrape-health/realtor-scrape-health?orgId=1`;
+
+    let color, lines = [];
+    if (h.status === 'ok') { color = '#4ade80'; lines.push('<span style="color:#4ade80">●</span> <b>All systems OK</b>'); }
+    else if (h.status === 'warning') { color = '#fbbf24'; lines.push('<span style="color:#fbbf24">●</span> <b>Warning</b>'); if (h.stale) lines.push('Stale >48h'); if (h.errors) lines.push(h.errors + ' error(s)'); }
+    else { color = '#f87171'; lines.push('<span style="color:#f87171">●</span> <b>Error</b>'); lines.push(h.message || 'Unknown'); }
+    dot.style.background = color;
+    lines.push(`Job: ${h.job || '?'}`);
+    lines.push(`Ran: ${h.finished_at ? new Date(h.finished_at).toLocaleString() : 'never'}`);
+    lines.push(`Age: ${h.age_hours ? h.age_hours.toFixed(1) : '?'}h`);
+    lines.push(`Errors: ${h.errors ?? '?'}`);
+    tip.innerHTML = lines.join('<br>');
+    dot.addEventListener('mouseenter', () => tip.style.display = 'block');
+    dot.addEventListener('mouseleave', () => tip.style.display = 'none');
+  } catch(e) { console.error('health fetch failed', e); }
+}
+
+async function fetchPulse() {
+  try {
+    const r = await fetch('/api/pulse');
+    const p = await r.json();
+    const el = document.getElementById('pulse-summary');
+    const dt = document.getElementById('pulse-detail');
+    const ok = p.pulses.filter(x => x.success).length;
+    const total = p.pulses.length;
+    el.style.color = total > 0 && ok === total ? '#4ade80' : '#fbbf24';
+    el.textContent = `${ok}/${total} jobs OK`;
+    dt.innerHTML = p.pulses.map(j =>
+      `<span style="color:${j.success ? '#4ade80' : '#f87171'}">${j.success ? '✓' : '✗'}</span> ` +
+      `${j.name} — ${j.finished_at ? new Date(j.finished_at).toLocaleDateString() + ' ' + new Date(j.finished_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : 'never'} ` +
+      `(${j.duration_sec || '?'}s)`
+    ).join('<br>');
+  } catch(e) { document.getElementById('pulse-summary').textContent = 'Error loading'; }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+fetchHealth();
+fetchPulse();
+loadStats().then(() => { loadSites(0); loadQuietCountyPortfolio(); }).catch(e => console.error('init error:', e));
+</script>
+</body>
+</html>

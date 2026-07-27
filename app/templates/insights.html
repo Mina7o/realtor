@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strategic Insights | Data Center Command</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body class="dashboard-body">
+    <div class="page-shell">
+        <section class="glass-hero">
+            <div class="hero-grid">
+                <div class="hero-stack">
+                    <div class="hero-kicker">Commercial Strategy Layer</div>
+                    <h1 class="animate-title">Strategic Insights 2026</h1>
+                    <p class="hero-subtitle">Executive synthesis for grid bottlenecks, Georgia assembly clusters, transmission-adjacent sites, and permitting posture.</p>
+                </div>
+                <div class="hero-actions">
+                    <div class="header-links">
+                        <span class="nav-badge commercial">Commercial</span>
+                        <a href="/commercial" class="nav-link">Sites</a>
+                        <a href="/insights" class="nav-link active">Insights</a>
+                        <a href="/commercial_charts" class="nav-link">Infrastructure Alpha</a>
+                        <a href="/" class="nav-residential">Residential View</a>
+                        <a id="health-link" class="health-link" href="http://localhost:3000/d/scrape-health/realtor-scrape-health?orgId=1" target="_blank">
+                            <span id="health-dot" class="health-dot"></span>
+                            <span class="health-label">Health</span>
+                            <div id="health-tooltip" class="health-tooltip" style="display:none"></div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="insights-grid">
+            <!-- Timeline Gauge -->
+            <div class="insight-card col-8">
+                <div class="card-title">Infrastructure Critical Path (Weeks)</div>
+                <div class="chart-container">
+                    <canvas id="timelineChart"></canvas>
+                </div>
+                <div class="bridge-impact">
+                    <div class="bridge-icon">Grid</div>
+                    <div>
+                        <div style="font-weight:600; font-size: 0.9rem; color: var(--accent-blue);">Gas Bridge Impact</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);">Decouples compute online date from grid interconnection. Accelerates energization by 18-24 months.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="insight-card col-4">
+                <div class="card-title">Grid Bottleneck</div>
+                <div class="big-stat" id="leadTime">160w</div>
+                <div class="sub-stat">Current Transformer Delivery (2029)</div>
+                
+                <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
+                
+                <div class="card-title">Power Bridge</div>
+                <div class="big-stat blue">Q3 2027</div>
+                <div class="sub-stat">Target Commissioning (On-Site Gas)</div>
+            </div>
+
+            <!-- GA Clusters -->
+            <div class="insight-card col-6">
+                <div class="card-title">Georgia Assembly Clusters (≥100ac)</div>
+                <div id="gaClustersContainer">
+                    <!-- Loaded via JS -->
+                </div>
+            </div>
+
+            <!-- Transmission Sites -->
+            <div class="insight-card col-6">
+                <div class="card-title">Top Transmission-Adjacent Sites</div>
+                <div id="transmissionContainer">
+                    <!-- Loaded via JS -->
+                </div>
+            </div>
+
+            <!-- ARC Ingest Stats -->
+            <div class="insight-card col-4">
+                <div class="card-title">ARC Georgia Parcel Ingest</div>
+                <div id="arcIngestContainer">
+                    <!-- Loaded via JS -->
+                </div>
+            </div>
+
+            <!-- Zoning Analysis -->
+            <div class="insight-card col-8">
+                <div class="card-title">Zoning Landscape — Ready Land (≥20ac)</div>
+                <div id="zoningContainer">
+                    <!-- Loaded via JS -->
+                </div>
+            </div>
+
+            <!-- Regulatory Status -->
+            <div class="insight-card col-4">
+                <div class="card-title">Regulatory & Permitting</div>
+                <div id="regulatoryContainer">
+                    <!-- Loaded via JS -->
+                </div>
+                <div style="margin-top:20px; font-size: 0.8rem; color: var(--text-muted); line-height:1.4;">
+                    <strong>Whitepaper Status:</strong> Proposing "AI-Readiness Overlay" to Charlotte Zoning Board to bypass June 8 Moratorium.
+                </div>
+            </div>
+
+            <!-- Active Clusters -->
+            <div class="insight-card col-4">
+                <div class="card-title">Active Acquisition Clusters</div>
+                <div id="clustersContainer">
+                    <!-- Loaded via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        async function loadInsights() {
+            const resp = await fetch('/api/strategic-brief');
+            const data = await resp.json();
+
+            // Timeline Chart
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Transformers', 'Grid Conn', 'Gas Bridge'],
+                    datasets: [{
+                        label: 'Weeks to Ready',
+                        data: [160, 260, 64],
+                        backgroundColor: ['#f44336', '#ff9800', '#00d2ff'],
+                        borderColor: 'transparent',
+                        borderWidth: 0,
+                        barThickness: 40
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { 
+                            grid: { color: '#2a2a2e' },
+                            ticks: { color: '#88888b' }
+                        },
+                        y: { 
+                            grid: { display: false },
+                            ticks: { color: '#e0e0e0' }
+                        }
+                    }
+                }
+            });
+
+            // GA Clusters
+            const gaCont = document.getElementById('gaClustersContainer');
+            if (data.ga_clusters && data.ga_clusters.length) {
+                data.ga_clusters.forEach(c => {
+                    const div = document.createElement('div');
+                    div.className = 'cluster-item';
+                    div.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                            <div class="cluster-name">Cluster #${c.rank}: ${c.acres.toLocaleString()}ac</div>
+                            <span class="status-badge ok">${c.parcels} parcels</span>
+                        </div>
+                        <div class="cluster-details">
+                            County: ${c.county}<br>
+                            Top Parcel: ${c.top_parcel}<br>
+                            Zoning: ${c.zoning} | Value: $${(c.assessed_value || 0).toLocaleString()}
+                        </div>
+                    `;
+                    gaCont.appendChild(div);
+                });
+            } else {
+                gaCont.innerHTML = '<div class="cluster-details" style="padding:20px 0;">No GA clusters loaded.</div>';
+            }
+
+            // Transmission Sites
+            const txCont = document.getElementById('transmissionContainer');
+            if (data.transmission_sites && data.transmission_sites.length) {
+                data.transmission_sites.forEach(s => {
+                    const div = document.createElement('div');
+                    div.className = 'cluster-item';
+                    div.style.borderLeftColor = '#00d2ff';
+                    div.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                            <div class="cluster-name">${(s.name || '').trim() || 'Unnamed'}</div>
+                            <span class="status-badge ok">${s.tier}</span>
+                        </div>
+                        <div class="cluster-details">
+                            ${s.county} | ${Number(s.acres).toFixed(0)}ac<br>
+                            ${s.owner || 'Unknown'}<br>
+                            Score: ${s.score} (TX: ${s.transmission_score}) | ${Number(s.distance_miles).toFixed(2)}mi to HV
+                        </div>
+                    `;
+                    txCont.appendChild(div);
+                });
+            } else {
+                txCont.innerHTML = '<div class="cluster-details" style="padding:20px 0;">No transmission-adjacent sites.</div>';
+            }
+
+            // ARC Ingest
+            const arcCont = document.getElementById('arcIngestContainer');
+            if (data.arc_ingest) {
+                arcCont.innerHTML = `
+                    <div style="margin: 15px 0;">
+                        <div class="big-stat" style="font-size:1.5rem;">${(data.arc_ingest.total || 0).toLocaleString()}</div>
+                        <div class="sub-stat">Total ARC Parcels</div>
+                    </div>
+                    <hr style="border:0;border-top:1px solid var(--border);margin:15px 0;">
+                    <div style="font-size:0.85rem;color:var(--text-muted);line-height:1.8;">
+                        <div>Fulton: <strong>${(data.arc_ingest.fulton || 0).toLocaleString()}</strong></div>
+                        <div>DeKalb: <strong>${(data.arc_ingest.dekalb || 0).toLocaleString()}</strong></div>
+                    </div>
+                `;
+            }
+
+            // Zoning Analysis
+            const zoningCont = document.getElementById('zoningContainer');
+            if (data.zoning) {
+                const groups = data.zoning.filter(g => g.group !== 'Unknown');
+                const barColor = {'Industrial':'#00e676','Light Industrial':'#69f0ae','Commercial':'#ffd740','Neighborhood Mixed':'#ffab40','Ag/Rural Residential':'#40c4ff','Residential':'#4fc3f7','Urban/Institutional':'#e0e0e0','Other':'#757575'};
+                const maxAcres = Math.max(...groups.map(g => g.total_acres));
+
+                let html = '<table class="zoning-table"><tr><th>Category</th><th>Sites</th><th>Total Acres</th><th>Avg Score</th><th>A-Tier</th><th>Assembly</th><th>Share of Land</th></tr>';
+                groups.forEach(g => {
+                    const pct = Math.round(g.total_acres / maxAcres * 100);
+                    html += `<tr>
+                        <td><span class="zone-label" style="background:${barColor[g.group]||'#666'}"></span>${g.group}</td>
+                        <td>${g.count.toLocaleString()}</td>
+                        <td style="font-weight:600">${g.total_acres.toLocaleString()}ac</td>
+                        <td>${g.avg_score}</td>
+                        <td>${g.tier_a}</td>
+                        <td>${g.assembly_eligible}</td>
+                        <td><div class="zoning-bar" style="width:${pct}%;background:${barColor[g.group]||'#666'}">${pct}%</div></td>
+                    </tr>`;
+                });
+                html += '</table>';
+
+                // County breakdown
+                if (data.zoning_by_county) {
+                    const counties = [...new Set(data.zoning_by_county.map(z => z.county))];
+                    html += '<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:15px;">';
+                    counties.forEach(co => {
+                        const rows = data.zoning_by_county.filter(z => z.county === co);
+                        const total = rows.reduce((s, r) => s + r.total_acres, 0);
+                        html += `<div style="flex:1;min-width:140px;font-size:0.75rem;">
+                            <div style="color:var(--text-muted);font-weight:600;margin-bottom:4px;">${co}</div>`;
+                        rows.forEach(r => {
+                            const pct = total > 0 ? Math.round(r.total_acres / total * 100) : 0;
+                            html += `<div style="margin:2px 0;">
+                                <span class="zone-label" style="background:${barColor[r.group]||'#666'}"></span>
+                                ${r.count} sites · ${r.total_acres}ac (${pct}%)
+                            </div>`;
+                        });
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                }
+
+                html += '<div class="zone-legend">';
+                html += '<span><span class="zone-label" style="background:#00e676"></span>Industrial — prime for DC</span>';
+                html += '<span><span class="zone-label" style="background:#69f0ae"></span>Light Industrial — feasible</span>';
+                html += '<span><span class="zone-label" style="background:#40c4ff"></span>Ag/Rural — large parcels, needs rezoning</span>';
+                html += '<span><span class="zone-label" style="background:#ffd740"></span>Commercial — possible with overlay</span>';
+                html += '</div>';
+
+                zoningCont.innerHTML = html;
+            } else {
+                zoningCont.innerHTML = '<div class="cluster-details" style="padding:20px 0;">No zoning data loaded.</div>';
+            }
+
+            // Clusters placeholder
+            const clusterCont = document.getElementById('clustersContainer');
+            const legacyClusters = [
+                { name: 'Monroe Hyperscale Cluster', anchor: 'HB MONROE 2 LLC', acreage: '20.3ac → 60+ac', power: '0.6mi to 230kV', gas: 'Adjacent pipeline', status: 'A-Tier' },
+                { name: 'Rowan Siemens Hub', anchor: 'Siemens Adjacent', acreage: 'Multiple 50+ac sites', power: 'Near Siemens Plant', gas: '', status: 'Enrichment Active' }
+            ];
+            legacyClusters.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'cluster-item';
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div class="cluster-name">${c.name}</div>
+                        <span class="status-badge ${c.status.toLowerCase().includes('tier') ? 'ok' : 'info'}">${c.status}</span>
+                    </div>
+                    <div class="cluster-details">
+                        Anchor: ${c.anchor}<br>
+                        Capacity: ${c.acreage}<br>
+                        Power: ${c.power}${c.gas ? ' | Gas: ' + c.gas : ''}
+                    </div>
+                `;
+                clusterCont.appendChild(div);
+            });
+
+            // Regulatory
+            const regCont = document.getElementById('regulatoryContainer');
+            const regItems = [
+                { label: 'CLT Moratorium', status: data.regulatory.charlotte_status, color: 'err' },
+                { label: 'Overlay Strategy', status: 'Proposed', color: 'info' },
+                { label: 'NC DEQ Check', status: 'Ready', color: 'ok' },
+                { label: 'Rowan Moratorium', status: data.regulatory.rowan_moratorium || 'Unknown', color: 'err' }
+            ];
+            regItems.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'regulatory-item';
+                div.innerHTML = `
+                    <div class="regulatory-label">${item.label}</div>
+                    <span class="status-badge ${item.color}">${item.status}</span>
+                `;
+                regCont.appendChild(div);
+            });
+        }
+
+        async function fetchHealth() {
+            try {
+                const r = await fetch('/api/health');
+                const h = await r.json();
+                const dot = document.getElementById('health-dot');
+                const tip = document.getElementById('health-tooltip');
+                const link = document.getElementById('health-link');
+                const host = window.location.hostname;
+                link.href = `http://${host}:3000/d/scrape-health/realtor-scrape-health?orgId=1`;
+                let color, lines = [];
+                if (h.status === 'ok') { color = '#4ade80'; lines.push('<span style="color:#4ade80">\u25cf</span> <b>All systems OK</b>'); }
+                else if (h.status === 'warning') { color = '#fbbf24'; lines.push('<span style="color:#fbbf24">\u25cf</span> <b>Warning</b>'); if (h.stale) lines.push('  Stale \u2014 last run >48h ago'); if (h.errors) lines.push(`  ${h.errors} error(s)`); }
+                else { color = '#f87171'; lines.push('<span style="color:#f87171">\u25cf</span> <b>Error</b>'); lines.push('  ' + (h.message || 'Unknown')); }
+                dot.style.background = color;
+                lines.push(`<span style="color:#64748b">Job:</span> ${h.job || '?'}`);
+                lines.push(`<span style="color:#64748b">Ran:</span> ${h.finished_at ? new Date(h.finished_at).toLocaleString() : 'never'}`);
+                lines.push(`<span style="color:#64748b">Age:</span> ${h.age_hours ? h.age_hours.toFixed(1) : '?'}h`);
+                lines.push(`<span style="color:#64748b">Errors:</span> ${h.errors ?? '?'}`);
+                tip.innerHTML = lines.join('<br>');
+                dot.addEventListener('mouseenter', () => tip.style.display = 'block');
+                dot.addEventListener('mouseleave', () => tip.style.display = 'none');
+            } catch(e) { /* ignore */ }
+        }
+
+        loadInsights();
+        fetchHealth();
+    </script>
+</body>
+</html>

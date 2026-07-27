@@ -45,7 +45,6 @@ CREATE TABLE IF NOT EXISTS listings (
     listing_date TEXT,
     source TEXT,
     mls_id TEXT,
-    rentcast_id TEXT,
     url TEXT,
     fetched_at TEXT DEFAULT (datetime('now')),
     zestimate REAL,

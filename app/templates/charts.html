@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css" />
+  <title>Deal Analytics Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body class="dashboard-body">
+  <div class="page-shell">
+    <section class="glass-hero">
+      <div class="hero-grid">
+        <div class="hero-stack">
+          <div class="hero-kicker">Residential Portfolio Signal</div>
+          <h1 class="animate-title">Deal Finder Analytics</h1>
+          <p class="hero-subtitle">Premium glass analytics view for city-level deal quality, absentee concentration, price dislocations, and broker inventory concentration.</p>
+        </div>
+        <div class="hero-actions">
+          <div class="header-links">
+            <span class="nav-badge residential">Residential</span>
+            <a href="/" class="nav-link">Home</a>
+            <a href="/charts" class="nav-link active">Portfolio Alpha</a>
+            <a href="/commercial" class="nav-commercial">Commercial View</a>
+            <a id="health-link" href="http://localhost:3000/d/scrape-health/realtor-scrape-health?orgId=1" target="_blank" class="health-link">
+              <span id="health-dot" class="health-dot"></span>
+              <span class="health-label">Health</span>
+              <div id="health-tooltip" class="health-tooltip"></div>
+            </a>
+          </div>
+          <div class="hero-tags">
+            <span class="hero-chip" id="status">Loading...</span>
+          </div>
+        </div>
+      </div>
+      <div class="stat-row" id="stats-bar"></div>
+    </section>
+
+    <div class="charts-grid">
+    <div class="card"><h2>Deal Tiers</h2><canvas id="chart-tiers"></canvas></div>
+    <div class="card"><h2>Discount % Distribution</h2><canvas id="chart-discount"></canvas></div>
+
+    <div class="card full">
+      <h2>Deal Quality by City <span style="font-weight:400;color:#64748b;text-transform:none">— total / undervalued / absentee</span></h2>
+      <canvas id="chart-cities"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>Absentee Rate by City</h2>
+      <canvas id="chart-absentee"></canvas>
+    </div>
+    <div class="card">
+      <h2>Price vs Market Value <span style="font-weight:400;color:#64748b;text-transform:none">— dots below line = deals</span></h2>
+      <canvas id="chart-scatter"></canvas>
+    </div>
+
+    <div class="card full" style="max-height:340px;overflow:auto">
+      <h2>Recent Price Drops</h2>
+      <table class="compact-table">
+        <thead><tr>
+          <th>Address</th><th>City</th><th class="price">Old</th><th class="price">New</th><th class="price">Drop</th><th>Date</th><th class="price">Times</th><th>Owner</th>
+        </tr></thead>
+        <tbody id="drops-body"><tr><td colspan="8" class="loading">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="grid-column: 1;max-height:340px;overflow:auto">
+      <h2>Best Undervalued Deals</h2>
+      <table class="compact-table">
+        <thead><tr>
+          <th>Address</th><th class="price">List</th><th class="price">Mkt Val</th><th class="price">Disc</th><th>Acres</th>
+        </tr></thead>
+        <tbody id="deals-body"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="grid-column: 2;max-height:340px;overflow:auto">
+      <h2>Top Brokers</h2>
+      <table class="compact-table">
+        <thead><tr><th>Broker</th><th class="price">Listings</th></tr></thead>
+        <tbody id="brokers-body"><tr><td colspan="2" class="loading">Loading...</td></tr></tbody>
+      </table>
+    </div>
+    </div>
+
+  <script>
+    const API = '';
+    let charts = {};
+
+    async function load() {
+      try {
+        const resp = await fetch(API + '/api/charts');
+        const d = await resp.json();
+        document.getElementById('status').textContent = 'Updated ' + new Date().toLocaleTimeString();
+        renderStats(d);
+        renderTiers(d.tiers);
+        renderDiscountDist(d.deals);
+        renderCities(d.cities);
+        renderAbsenteeRate(d.cities);
+        renderScatter(d.deals);
+        renderDrops(d.price_drops);
+        renderDeals(d.undervalued);
+        renderBrokers(d.top_brokers);
+      } catch (e) {
+        document.getElementById('status').textContent = 'Error: ' + e.message;
+      }
+    }
+
+    function renderStats(d) {
+      const t = d.tiers;
+      const p = d.portfolio;
+      const total = d.total_with_value || 0;
+      const pct = total ? Math.round(t.undervalued / total * 100) : 0;
+      document.getElementById('stats-bar').innerHTML = `
+        <div class="stat-box highlight"><div class="num equity">$${(p.total_equity/1000000).toFixed(1)}M</div><div class="lbl">Portfolio Equity Alpha</div></div>
+        <div class="stat-box"><div class="num green">${p.avg_discount}%</div><div class="lbl">Avg Portfolio Discount</div></div>
+        <div class="stat-box"><div class="num">${p.deal_count}</div><div class="lbl">Total Active Deals</div></div>
+        <div class="stat-box"><div class="num amber">${d.price_drops ? d.price_drops.length : 0}</div><div class="lbl">Price Momentum</div></div>
+        <div class="stat-box"><div class="num red">${t.overpriced}</div><div class="lbl">Toxic Inventory</div></div>`;
+    }
+
+    function newChart(id, config) {
+      if (charts[id]) { charts[id].destroy(); }
+      const ctx = document.getElementById(id).getContext('2d');
+      charts[id] = new Chart(ctx, config);
+    }
+
+    function renderTiers(tiers) {
+      newChart('chart-tiers', {
+        type: 'doughnut',
+        data: {
+          labels: ['Undervalued', 'At Value', 'Premium', 'Overpriced'],
+          datasets: [{ data: [tiers.undervalued, tiers.at_value, tiers.premium, tiers.overpriced],
+            backgroundColor: ['#4ade80','#60a5fa','#fbbf24','#f87171'], borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { position: 'bottom', labels: { color:'#94a3b8', padding:10, font:{size:10} } } } }
+      });
+    }
+
+    function renderDiscountDist(deals) {
+      const buckets = {'<-30%':0,'-30%':0,'-20%':0,'-10%':0,'0%':0,'+10%':0,'+20%':0,'+30%':0,'+40%':0,'+50%+':0};
+      (deals || []).forEach(d => {
+        const p = d.diff_pct;
+        if (p === null || p === undefined) return;
+        if (p < -30) buckets['<-30%']++;
+        else if (p < -20) buckets['-30%']++;
+        else if (p < -10) buckets['-20%']++;
+        else if (p < 0) buckets['-10%']++;
+        else if (p < 10) buckets['0%']++;
+        else if (p < 20) buckets['+10%']++;
+        else if (p < 30) buckets['+20%']++;
+        else if (p < 40) buckets['+30%']++;
+        else if (p < 50) buckets['+40%']++;
+        else buckets['+50%+']++;
+      });
+      const labels = Object.keys(buckets);
+      const vals = Object.values(buckets);
+      const colors = labels.map(l => l.startsWith('-') ? '#4ade80' : l === '0%' ? '#60a5fa' : '#f87171');
+      newChart('chart-discount', {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Properties', data: vals, backgroundColor: colors, borderRadius: 3 }] },
+        options: { responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { color:'#64748b', font:{size:9} }, grid: { display: false } },
+                   y: { ticks: { color:'#64748b', font:{size:10} }, grid: { color:'#1e293b' }, beginAtZero: true } } }
+      });
+    }
+
+    function renderCities(cities) {
+      if (!cities || !cities.length) return;
+      newChart('chart-cities', {
+        type: 'bar',
+        data: {
+          labels: cities.map(c => c.city),
+          datasets: [
+            { label: 'Total', data: cities.map(c => c.total), backgroundColor: '#334155', borderRadius: 3 },
+            { label: 'Undervalued', data: cities.map(c => c.undervalued), backgroundColor: '#4ade80', borderRadius: 3 },
+            { label: 'Absentee', data: cities.map(c => c.absentee), backgroundColor: '#fbbf24', borderRadius: 3 },
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { position: 'top', labels: { color:'#94a3b8', boxWidth:12, padding:8, font:{size:10} } } },
+          scales: { x: { ticks: { color:'#64748b', font:{size:10} }, grid: { display: false } },
+                   y: { beginAtZero: true, ticks: { color:'#64748b', font:{size:10} }, grid: { color:'#1e293b' } } } }
+      });
+    }
+
+    function renderAbsenteeRate(cities) {
+      if (!cities || !cities.length) return;
+      const labels = cities.map(c => c.city);
+      const rates = cities.map(c => c.total ? Math.round(c.absentee / c.total * 100) : 0);
+      newChart('chart-absentee', {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Absentee %', data: rates, backgroundColor: rates.map(r => r > 20 ? '#f87171' : r > 10 ? '#fbbf24' : '#4ade80'), borderRadius: 3 }] },
+        options: { responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { color:'#64748b', font:{size:10} }, grid: { display: false } },
+                   y: { beginAtZero: true, max: 100, ticks: { color:'#64748b', font:{size:10}, callback: v => v+'%' }, grid: { color:'#1e293b' } } } }
+      });
+    }
+
+    function renderScatter(deals) {
+      if (!deals || !deals.length) return;
+      const undervalued = deals.filter(d => d.diff_pct < 0).map(d => ({ x: d.market_value, y: d.list_price }));
+      const overvalued = deals.filter(d => d.diff_pct >= 0).map(d => ({ x: d.market_value, y: d.list_price }));
+      newChart('chart-scatter', {
+        type: 'scatter',
+        data: {
+          datasets: [
+            { label: 'Undervalued', data: undervalued, backgroundColor: '#4ade80', pointRadius: 3 },
+            { label: 'At/Above Value', data: overvalued, backgroundColor: '#475569', pointRadius: 2 },
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { position: 'top', labels: { color:'#94a3b8', boxWidth:12, padding:8, font:{size:10} } } },
+          scales: {
+            x: { title: { display: true, text: 'Market Value ($)', color: '#64748b', font:{size:10} },
+                 ticks: { color:'#64748b', font:{size:9}, callback: v => '$'+(v/1000)+'k' }, grid: { color:'#1e293b' } },
+            y: { title: { display: true, text: 'List Price ($)', color: '#64748b', font:{size:10} },
+                 ticks: { color:'#64748b', font:{size:9}, callback: v => '$'+(v/1000)+'k' }, grid: { color:'#1e293b' } }
+          }
+        }
+      });
+    }
+
+    function renderDrops(drops) {
+      if (!drops || !drops.length) {
+        document.getElementById('drops-body').innerHTML = '<tr><td colspan="8" style="text-align:center;color:#64748b;padding:1rem">None</td></tr>';
+        return;
+      }
+      document.getElementById('drops-body').innerHTML = drops.map(d => {
+        const amt = d.old_price - d.new_price;
+        const pct = d.old_price ? Math.round(amt / d.old_price * 100) : 0;
+        return `<tr>
+          <td>${d.url ? `<a href="${d.url}" target="_blank">${esc(d.address)}</a>` : esc(d.address)}</td>
+          <td>${esc(d.city)}</td>
+          <td class="price">$${d.old_price.toLocaleString()}</td>
+          <td class="price">$${d.new_price.toLocaleString()}</td>
+          <td class="price green">-$${amt.toLocaleString()} (${pct}%)</td>
+          <td>${d.detected_at || '-'}</td>
+          <td class="price">${esc(d.times || '')}</td>
+          <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${esc(d.owner_name || '')}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderDeals(deals) {
+      const tbody = document.getElementById('deals-body');
+      if (!deals || !deals.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;padding:1rem">None</td></tr>';
+        return;
+      }
+      tbody.innerHTML = deals.map(d => `<tr>
+        <td>${d.url ? `<a href="${d.url}" target="_blank">${esc(d.address)}</a>` : esc(d.address)}</td>
+        <td class="price">$${d.list_price.toLocaleString()}</td>
+        <td class="price">$${d.market_value.toLocaleString()}</td>
+        <td class="price green">${d.diff_pct}%</td>
+        <td>${d.acres ? d.acres+'a' : '-'}</td>
+      </tr>`).join('');
+    }
+
+    function renderBrokers(brokers) {
+      const tbody = document.getElementById('brokers-body');
+      if (!brokers || !brokers.length) {
+        tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#64748b;padding:1rem">None</td></tr>';
+        return;
+      }
+      tbody.innerHTML = brokers.map(b => `<tr>
+        <td style="font-weight:600">${esc(b.name)}</td>
+        <td class="price" style="color:#60a5fa">${b.count}</td>
+      </tr>`).join('');
+    }
+
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    async function fetchHealth() {
+      try {
+        const r = await fetch('/api/health');
+        const h = await r.json();
+        const dot = document.getElementById('health-dot');
+        const tip = document.getElementById('health-tooltip');
+        const link = document.getElementById('health-link');
+        const host = window.location.hostname;
+        link.href = `http://${host}:3000/d/scrape-health/realtor-scrape-health?orgId=1`;
+        let color, lines = [];
+        if (h.status === 'ok') {
+          color = '#4ade80';
+          lines.push('<span style="color:#4ade80">●</span> <b>All systems OK</b>');
+        } else if (h.status === 'warning') {
+          color = '#fbbf24';
+          lines.push('<span style="color:#fbbf24">●</span> <b>Warning</b>');
+          if (h.stale) lines.push('  Stale \u2014 last run >48h ago');
+          if (h.errors) lines.push(`  ${h.errors} error(s)`);
+        } else {
+          color = '#f87171';
+          lines.push('<span style="color:#f87171">●</span> <b>Error</b>');
+          lines.push('  ' + (h.message || 'Unknown'));
+        }
+        dot.style.background = color;
+        lines.push(`<span style="color:#64748b">Job:</span> ${h.job || '?'}`);
+        lines.push(`<span style="color:#64748b">Ran:</span> ${h.finished_at ? new Date(h.finished_at).toLocaleString() : 'never'}`);
+        lines.push(`<span style="color:#64748b">Age:</span> ${h.age_hours ? h.age_hours.toFixed(1) : '?'}h`);
+        lines.push(`<span style="color:#64748b">Errors:</span> ${h.errors ?? '?'}`);
+        tip.innerHTML = lines.join('<br>');
+        dot.addEventListener('mouseenter', () => tip.style.display = 'block');
+        dot.addEventListener('mouseleave', () => tip.style.display = 'none');
+      } catch(e) { /* ignore */ }
+    }
+
+    load();
+    fetchHealth();
+  </script>
+  </div>
+</body>
+</html>

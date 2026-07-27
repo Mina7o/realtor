@@ -1,0 +1,311 @@
+{
+  "uid": "scrape-health",
+  "title": "Realtor Scrape Health",
+  "tags": ["realtor", "scraping"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "version": 2,
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 9,
+      "title": "Health Status",
+      "description": "Count of successful health pulses in last 24h — green >= 1 means last scrape succeeded",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "targets": [{
+        "expr": "count_over_time({job=\"realtor\"} |~ \"HEALTH_OK\" [24h])",
+        "legendFormat": "OK pulses",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "red", "value": null },
+            { "color": "green", "value": 1 }
+          ]},
+          "unit": "none"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Degraded Runs",
+      "description": "Count of failed health pulses — should be 0",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "targets": [{
+        "expr": "count_over_time({job=\"realtor\"} |~ \"HEALTH_DEGRADED\" [24h])",
+        "legendFormat": "degraded",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "red", "value": 1 }
+          ]},
+          "unit": "none"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Health Pulse Log",
+      "description": "Most recent health pulse entries from scrape runs",
+      "type": "logs",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "targets": [{
+        "expr": "{job=\"realtor\"} |~ \"HEALTH_\" | line_format \"{{.msg}}\"",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "options": { "showTime": true, "showLabels": false }
+    },
+    {
+      "id": 1,
+      "title": "Errors (last 24h)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 0, "y": 4 },
+      "targets": [{
+        "expr": "count_over_time({job=\"realtor\"} | level=\"ERROR\" [24h])",
+        "legendFormat": "errors",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "orange", "value": 5 },
+            { "color": "red", "value": 20 }
+          ]},
+          "unit": "none"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Total Logs (24h)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 3, "y": 4 },
+      "targets": [{
+        "expr": "count_over_time({job=\"realtor\"}[24h])",
+        "legendFormat": "total logs",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed" }, "unit": "none" }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Scrapes Today",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 6, "y": 4 },
+      "targets": [{
+        "expr": "count_over_time({job=\"realtor\", module=~\"fetch_.*\"}[24h])",
+        "legendFormat": "scrapes",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed" }, "unit": "none" }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Scrape Job Status",
+      "description": "Latest health pulse showing job, errors, and completion time",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 9, "y": 4 },
+      "targets": [{
+        "expr": "count_over_time({job=\"realtor\"} |~ \"HEALTH_\" [24h])",
+        "legendFormat": "pulses",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "red", "value": null },
+            { "color": "green", "value": 1 }
+          ]},
+          "unit": "none"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Log Volume by Level",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "targets": [{
+        "expr": "sum by (level) (count_over_time({job=\"realtor\"}[24h]))",
+        "legendFormat": "{{level}}",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "none" }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Errors Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "targets": [{
+        "expr": "sum by (level) (rate({job=\"realtor\"} | level=\"ERROR\" [5m]))",
+        "legendFormat": "{{level}}",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "none" }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Logs by Module",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "targets": [{
+        "expr": "topk(10, sum by (module) (count_over_time({job=\"realtor\"}[24h])))",
+        "legendFormat": "{{module}}",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "none" }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Recent Errors",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "targets": [{
+        "expr": "{job=\"realtor\"} | level=\"ERROR\" | line_format \"{{.module}} | {{.msg}}\"",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "options": { "showTime": true, "showLabels": true }
+    },
+    {
+      "id": 8,
+      "title": "Last 100 Log Lines",
+      "type": "logs",
+      "gridPos": { "h": 10, "w": 16, "x": 0, "y": 24 },
+      "targets": [{
+        "expr": "{job=\"realtor\"} | line_format \"{{.module}} [{{.level}}] {{.msg}}\"",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "options": { "showTime": true, "showLabels": true }
+    },
+    {
+      "id": 13,
+      "title": "Auto-Heal Status",
+      "description": "Successful auto-heal actions in last 24h",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 34 },
+      "targets": [{
+        "expr": "count_over_time({job=\"realtor\"} |~ \"HEAL_OK\" [24h])",
+        "legendFormat": "heal actions",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "red", "value": null },
+            { "color": "green", "value": 1 }
+          ]},
+          "unit": "none"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Heal Actions Log",
+      "description": "Recent auto-heal actions",
+      "type": "logs",
+      "gridPos": { "h": 4, "w": 8, "x": 4, "y": 34 },
+      "targets": [{
+        "expr": "{job=\"realtor\"} |~ \"HEAL_OK|HEAL_FAIL|HEALTH_DEGRADED.*auto_heal\" | line_format \"{{.msg}}\"",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "options": { "showTime": true, "showLabels": false }
+    },
+    {
+      "id": 15,
+      "title": "Errors by Module",
+      "description": "Error count grouped by module for last 24h",
+      "type": "barchart",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 34 },
+      "targets": [{
+        "expr": "topk(10, sum by (module) (count_over_time({job=\"realtor\"} | level=\"ERROR\" [24h])))",
+        "legendFormat": "{{module}}",
+        "datasource": { "type": "loki", "uid": "loki_ds" }
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "none" }
+      }
+    },
+    {
+      "id": 16,
+      "title": "Recent Traces",
+      "description": "Recent traces from all services in the last 30m",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 38 },
+      "datasource": { "type": "tempo", "uid": "tempo_ds" },
+      "targets": [{
+        "datasource": { "type": "tempo", "uid": "tempo_ds" },
+        "refId": "A",
+        "queryType": "traceql",
+        "query": "{.service.name !=\"\"} | select(.service.name, .batch_id, .http.status_code)"
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "none" }
+      }
+    },
+    {
+      "id": 17,
+      "title": "Services Traced",
+      "description": "Unique services recorded in Tempo traces (last 24h)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 46 },
+      "datasource": { "type": "tempo", "uid": "tempo_ds" },
+      "targets": [{
+        "datasource": { "type": "tempo", "uid": "tempo_ds" },
+        "refId": "A",
+        "queryType": "traceql",
+        "query": "{.service.name !=\"\"} | select(.service.name)"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "red", "value": null },
+            { "color": "green", "value": 1 }
+          ]},
+          "unit": "none"
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "TraceQL: Service Map",
+      "description": "All services with traces in the last 1h",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 8, "x": 4, "y": 46 },
+      "datasource": { "type": "tempo", "uid": "tempo_ds" },
+      "targets": [{
+        "datasource": { "type": "tempo", "uid": "tempo_ds" },
+        "refId": "A",
+        "queryType": "traceql",
+        "query": "{.service.name !=\"\"} | select(.service.name, .batch_id) | limit(20)"
+      }],
+      "fieldConfig": {
+        "defaults": { "unit": "none" }
+      }
+    }
+  ]
+}

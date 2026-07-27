@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+venv/
+.env
+.env.groq
+.git/
+output/
+node_modules/
+data/
+*.db
+*.db-shm
+*.db-wal
+.crawl4ai_profile/
+README.md
+test_*.py
+AGENTS.md

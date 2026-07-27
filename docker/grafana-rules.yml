@@ -1,0 +1,72 @@
+apiVersion: 1
+groups:
+  - name: realtor_health
+    folder: Realtor
+    interval: 1m
+    rules:
+      - uid: health_degraded
+        title: "Scrape Health Degraded"
+        condition: A
+        data:
+          - refId: A
+            queryType: instant
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: loki_ds
+            model:
+              expr: 'count_over_time({job="realtor"} |= "HEALTH_DEGRADED" [5m]) > 0'
+              refId: A
+        noDataState: NoData
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "Scrape health is degraded — check Grafana dashboard for details"
+          runbook_url: "http://localhost:3000/d/scrape-health"
+        labels:
+          severity: critical
+
+      - uid: auto_heal_escalated
+        title: "Auto-Heal Escalated"
+        condition: A
+        data:
+          - refId: A
+            queryType: instant
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: loki_ds
+            model:
+              expr: 'count_over_time({job="realtor"} |~ "HEAL_ESCALATED|HEAL_BLOCKED" [5m]) > 0'
+              refId: A
+        noDataState: NoData
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "Auto-heal escalated — errors require human review"
+          runbook_url: "http://localhost:3000/d/scrape-health"
+        labels:
+          severity: critical
+
+      - uid: high_error_rate
+        title: "High Error Rate"
+        condition: A
+        data:
+          - refId: A
+            queryType: instant
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: loki_ds
+            model:
+              expr: 'count_over_time({job="realtor"} | level="ERROR" [15m]) > 10'
+              refId: A
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "{{ $values.A.Labels }} errors in last 15 minutes — investigate"
+        labels:
+          severity: warning
+
+
